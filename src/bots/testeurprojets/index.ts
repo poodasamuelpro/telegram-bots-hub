@@ -432,7 +432,7 @@ function mentionedProject(text: string): ProjectConfig | undefined {
 }
 export function fallbackIntent(text: string): { command: string; args: string } | undefined {
   const value = normalize(text); const project = mentionedProject(text); const slug = project?.slug ?? ''
-  if (/\b(ouvre|ouvrir|ouvrir les|reouvrir|reactiver)\b/.test(value)) return { command: 'ouvrir', args: slug }
+  if (/\b(ouvre|ouvrir|ouvrir les|reouvrir|reouvre|reactiver)\b/.test(value)) return { command: 'ouvrir', args: slug }
   if (/\b(ferme les|fermer|ferme|cloturer|desactive)\b/.test(value)) return { command: 'fermer', args: slug }
   if (/\b(quota|objectif|plafond|maximum)\b/.test(value)) {
     const amount = value.match(/\b(\d{1,3})\b/)?.[1]
@@ -442,15 +442,15 @@ export function fallbackIntent(text: string): { command: string; args: string } 
   if (/\b(lien|liens|whatsapp|espace admin)\b/.test(value)) return { command: 'liens', args: '' }
   if (/\b(exporte?|exporter|excel|xlsx|telecharger|fichier)\b/.test(value)) return /\b(tous les projets|tout|toutes les bases)\b/.test(value) ? { command: 'exporttout', args: '' } : { command: 'export', args: slug }
   if (/\b(repartition|distribution|par appareil|par ville)\b/.test(value)) return { command: 'repartition', args: slug }
-  if (/\b(dernier|derniers|recemment|recent)\b/.test(value)) return { command: 'derniers', args: `5 ${slug}`.trim() }
+  if (/\b(dernier|derniers|recemment|recent|recents)\b/.test(value)) return { command: 'derniers', args: `5 ${slug}`.trim() }
   const search = value.match(/\b(?:cherche|recherche|trouve|chercher)\s+(?:un|une|le|la|les)?\s*(.+)/)
   if (search?.[1]) {
     let query = search[1].trim()
     if (project) query = query.replace(new RegExp(`\\b(?:sur|dans|de|du|des|pour)\\s+${project.slug}\\b`, 'g'), '').replace(new RegExp(`\\b${project.slug}\\b`, 'g'), '').trim()
     if (query) return { command: 'recherche', args: `${query} ${slug}`.trim() }
   }
-  if (/\b(stat|stats|statistique|combien|inscrit|inscriptions|effectif|ouvert|ferme)\b/.test(value)) return { command: 'stats', args: slug }
-  if (/\b(liste|inscrits|testeurs|qui est|qui sont)\b/.test(value)) return { command: 'liste', args: slug }
+  if (/\b(stat|stats|statistique|statistiques|nombre|combien|effectif|ouvert|ferme)\b/.test(value)) return { command: 'stats', args: slug }
+  if (/\b(liste|inscrits|testeurs|qui|qui est|qui sont)\b/.test(value)) return { command: 'liste', args: slug }
   return undefined
 }
 

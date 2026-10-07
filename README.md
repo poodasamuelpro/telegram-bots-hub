@@ -66,6 +66,25 @@ CI exécute les mêmes vérifications sur `main`. Les tests couvrent les différ
 
    Le script appelle `setWebhook` avec `secret_token`, `allowed_updates: ["message", "callback_query"]` et l’URL `/tg/<chemin-secret>`; il ne journalise ni token ni chemin. Il ne supprime pas les updates en attente.
 
+## Fonctionnement de bout en bout
+
+Il n’y a pas de tableau de bord web métier à utiliser : **Telegram est le tableau de bord opérationnel**. Le tableau de bord Cloudflare sert uniquement à configurer les variables, les secrets, les bindings et les journaux du Worker.
+
+1. Telegram envoie uniquement les messages et boutons du bot vers `POST /tg/<chemin-secret>`.
+2. Le Worker vérifie le secret Telegram, la conversation privée et l’identifiant utilisateur. `6730264801` est toujours accepté ; un autre identifiant doit être ajouté explicitement dans `HUB_ADMIN_IDS` ou `BOT_TESTEURPROJETS_ADMIN_IDS`.
+3. Le Worker déduplique l’update, applique la limite de débit, puis traite la commande avec `waitUntil`.
+4. Une commande ou une phrase en français est convertie en outil. Le fournisseur configuré est Anthropic, OpenAI ou Gemini ; avec `NL_PROVIDER=auto`, le premier fournisseur dont la clé existe est utilisé. Les paramètres passent ensuite dans les schémas Zod.
+5. Le modèle ne reçoit pas les lignes Supabase. Il choisit seulement un outil ; le code appelle ensuite Supabase, calcule les chiffres et construit le message.
+6. Les actions `ouvrir`, `fermer` et `quota` ne modifient rien immédiatement : le bot envoie un bouton signé. La modification n’est faite qu’après clic sur **Confirmer**.
+7. `/liste`, `/recherche`, `/derniers`, `/repartition`, `/stats` et `/sante` lisent les trois Supabase avec leurs adaptateurs de schéma respectifs.
+8. `/export monmenu appareil=android ville=Ouagadougou depuis=2026-01-01` et `/exporttout` produisent un `.xlsx` avec les filtres demandés. Les champs `extra` propres au projet deviennent des colonnes et les cellules commençant par `=`, `+`, `-` ou `@` sont neutralisées.
+9. Les états courts, les nonces de boutons, l’historique limité et les compteurs IA utilisent `HUB_KV` avec expiration. D1, `BOT_KV` et le registre multi-bot restent disponibles volontairement pour les futurs bots.
+10. En cas d’absence, de panne ou de dépassement du fournisseur IA, le routeur déterministe français prend le relais ; les commandes Telegram restent toujours disponibles.
+
+Dans le tableau de bord Cloudflare : **Workers & Pages → Worker → Settings → Variables and Secrets** pour les variables/secrets, **Bindings** pour D1/KV, **Deployments** pour les versions, et **Logs/Observability** pour diagnostiquer les codes d’erreur sans données personnelles.
+
+Pour configurer un seul administrateur, ne renseignez aucun autre identifiant : l’ID `6730264801` est intégré comme autorisation obligatoire. Pour ajouter quelqu’un, ajoutez son identifiant numérique dans la liste secrète, puis redéployez.
+
 ## Ajouter un bot
 
 Créer `src/bots/<nouveau-bot>/`, définir les secrets `BOT_<ID>_TOKEN`, `BOT_<ID>_WEBHOOK_SECRET`, `BOT_<ID>_WEBHOOK_PATH` et, si nécessaire, `BOT_<ID>_ADMIN_IDS`, puis ajouter une entrée d’une ligne dans `src/registry.ts` via `defineBot(...)` et un import dynamique du dossier du bot. Le routeur, la validation du webhook et le script `setWebhook` restent inchangés. Les adaptations futures de D1 et des autres bots legacy peuvent rester isolées.

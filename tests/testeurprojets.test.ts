@@ -54,6 +54,40 @@ describe('repli déterministe du langage naturel', () => {
   it('demande une clarification pour une intention non couverte', () => {
     expect(fallbackIntent('Bonjour, peux-tu m’aider ?')).toBeUndefined()
   })
+  it.each([
+    ['Combien de monde sur MonMenu ?', 'stats'],
+    ['Quel est le nombre d’inscrits sur Sophiate ?', 'stats'],
+    ['Montre-moi les statistiques', 'stats'],
+    ['Il reste combien de places partout ?', 'stats'],
+    ['Qui sont les testeurs de Vimsongre ?', 'liste'],
+    ['Affiche la liste des inscrits', 'liste'],
+    ['Qui s’est inscrit aujourd’hui ?', 'liste'],
+    ['Montre les derniers inscrits de MonMenu', 'derniers'],
+    ['Donne-moi les testeurs récents de Sophiate', 'derniers'],
+    ['Les derniers inscrits sur Vimsongre', 'derniers'],
+    ['Cherche Ouédraogo', 'recherche'],
+    ['Recherche Alice dans Sophiate', 'recherche'],
+    ['Trouve le numéro +22670000000', 'recherche'],
+    ['Envoie-moi l’excel de tous les projets', 'exporttout'],
+    ['Télécharge le fichier Excel de MonMenu', 'export'],
+    ['Exporte les inscrits de Sophiate', 'export'],
+    ['Je veux le fichier des testeurs', 'export'],
+    ['Répartition par appareil de Vimsongre', 'repartition'],
+    ['Donne la distribution par ville de MonMenu', 'repartition'],
+    ['Ouvre les inscriptions de MonMenu', 'ouvrir'],
+    ['Réouvre Sophiate', 'ouvrir'],
+    ['Ferme les inscriptions de Sophiate', 'fermer'],
+    ['Désactive la collecte Vimsongre', 'fermer'],
+    ['Passe le quota de Sophiate à 30', 'quota'],
+    ['Fixe l’objectif de Vimsongre à 40', 'quota'],
+    ['Mets le maximum de MonMenu à 25', 'quota'],
+    ['Le site fonctionne-t-il ?', 'sante'],
+    ['Donne-moi l’état du site', 'sante'],
+    ['Affiche les liens WhatsApp', 'liens'],
+    ['Je veux le lien de l’espace admin', 'liens'],
+  ])('reconnaît : %s', (phrase, command) => {
+    expect(fallbackIntent(phrase)?.command).toBe(command)
+  })
 })
 
 describe('sécurité des sorties', () => {
