@@ -8,6 +8,7 @@ import { answerCallback, sendDocument, sendMessage } from '../../core/telegram'
 import { constantTimeEqual, escapeHtml, safeIntent } from '../../core/security'
 import { createWorkbook } from '../../core/xlsx'
 import { getOverview, listAllTesters, listTesters, projectHealth, projectBySlug, setOpen, updateTarget, type Tester, type TesterFilter } from '../../core/supabase'
+import { hasLanguageModelProvider, routeLanguageModel, type LanguageMessage, type LanguageTool, type RoutedLanguageTool } from '../../core/natural-language'
 
 const formatDate = (value: string, timezone: string) => {
   try { return new Intl.DateTimeFormat('fr-FR', { timeZone: timezone, dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) }
@@ -361,7 +362,7 @@ const ToolSchemas: Record<string, z.ZodTypeAny> = {
   liens: z.object({}).strict(),
   aide: z.object({}).strict(),
 }
-const ToolDefinitions = [
+const ToolDefinitions: LanguageTool[] = [
   { name: 'stats', description: 'Lire les statistiques de tous les projets ou d’un projet choisi.', input_schema: { type: 'object', properties: { project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre'] } }, additionalProperties: false } },
   { name: 'liste', description: 'Lister les testeurs inscrits, avec filtres facultatifs.', input_schema: { type: 'object', properties: { project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre'] }, device: { type: 'string' }, city: { type: 'string' }, since: { type: 'string', description: 'Date locale AAAA-MM-JJ dans HUB_TIMEZONE.' } }, additionalProperties: false } },
   { name: 'derniers', description: 'Lire les inscriptions les plus récentes.', input_schema: { type: 'object', properties: { project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre'] }, count: { type: 'integer', minimum: 1, maximum: 20 } }, additionalProperties: false } },
@@ -377,42 +378,26 @@ const ToolDefinitions = [
   { name: 'aide', description: 'Afficher la liste des commandes du bot.', input_schema: { type: 'object', properties: {}, additionalProperties: false } },
 ]
 
-type RoutedTool = { name: string; input: Record<string, unknown> }
-async function anthropicRoute(ctx: BotContext, dailyLimit: number): Promise<RoutedTool | undefined> {
-  const apiKey = String(ctx.env.ANTHROPIC_API_KEY ?? '')
-  if (!apiKey || !(await allowAiCall(ctx.env, ctx.botId, ctx.user.id, ctx.update.update_id, dailyLimit))) return undefined
+async function languageModelRoute(ctx: BotContext, dailyLimit: number): Promise<RoutedLanguageTool | undefined> {
+  if (!(await allowAiCall(ctx.env, ctx.botId, ctx.user.id, ctx.update.update_id, dailyLimit))) return undefined
   let today: string
   try { today = new Intl.DateTimeFormat('fr-FR', { timeZone: String(ctx.env.HUB_TIMEZONE || 'UTC'), dateStyle: 'full' }).format(new Date()) }
   catch { today = new Date().toISOString().slice(0, 10) }
-  const messages: { role: 'user' | 'assistant'; content: string }[] = []
+  const messages: LanguageMessage[] = []
   for (const turn of ctx.history.slice(-8)) {
     if (!turn.user) continue
     messages.push({ role: 'user', content: turn.user.slice(0, 240) })
     messages.push({ role: 'assistant', content: `Action précédente : ${turn.intent}. Aucune donnée de testeur n’est incluse.` })
   }
   messages.push({ role: 'user', content: ctx.text.slice(0, 1200) })
-  let response: Response
-  try {
-    response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST', signal: AbortSignal.timeout(8_000),
-      headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({
-        model: String(ctx.env.NL_MODEL || 'claude-haiku-4-5-20251001'), max_tokens: 400,
-        system: `Tu es uniquement un routeur d’intentions pour un administrateur autorisé du hub Telegram. Date locale : ${today}; fuseau : ${String(ctx.env.HUB_TIMEZONE || 'UTC')}. Utilise exclusivement les outils fournis, jamais les données personnelles d’un testeur comme contexte. Ne rédige pas de réponse factuelle : le Worker exécutera l’outil et produira la réponse déterministe. Ne déclenche jamais une modification directement; les commandes ouvrir/fermer/quota afficheront toujours une confirmation signée. En cas de projet manquant ou ambigu, laisse le champ project absent afin que le Worker demande un choix. Si la demande n’est pas couverte, n’appelle aucun outil.`,
-        messages, tools: ToolDefinitions, tool_choice: { type: 'auto' },
-      }),
-    })
-  } catch { return undefined }
-  if (!response.ok) return undefined
-  const data = await response.json().catch(() => null) as { content?: { type: string; name?: string; input?: unknown }[] } | null
-  const block = data?.content?.find((part) => part.type === 'tool_use' && typeof part.name === 'string')
-  if (!block?.name || !Object.hasOwn(ToolSchemas, block.name)) return undefined
-  const validated = ToolSchemas[block.name]!.safeParse(block.input)
+  const routed = await routeLanguageModel(ctx.env, `Tu es uniquement un routeur d’intentions pour un administrateur autorisé du hub Telegram. Date locale : ${today}; fuseau : ${String(ctx.env.HUB_TIMEZONE || 'UTC')}. Utilise exclusivement les outils fournis, jamais les données personnelles d’un testeur comme contexte. Ne rédige pas de réponse factuelle : le Worker exécutera l’outil et produira la réponse déterministe. Ne déclenche jamais une modification directement; les commandes ouvrir/fermer/quota afficheront toujours une confirmation signée. En cas de projet manquant ou ambigu, laisse le champ project absent afin que le Worker demande un choix. Si la demande n’est pas couverte, n’appelle aucun outil.`, messages, ToolDefinitions)
+  if (!routed || !Object.hasOwn(ToolSchemas, routed.name)) return undefined
+  const validated = ToolSchemas[routed.name]!.safeParse(routed.input)
   if (!validated.success || !validated.data || typeof validated.data !== 'object') return undefined
-  return { name: block.name, input: validated.data as Record<string, unknown> }
+  return { name: routed.name, input: validated.data as Record<string, unknown> }
 }
 
-async function executeTool(ctx: BotContext, tool: RoutedTool): Promise<string> {
+async function executeTool(ctx: BotContext, tool: RoutedLanguageTool): Promise<string> {
   const input = tool.input
   const slug = typeof input.project === 'string' ? input.project : ''
   const project = projectBySlug(slug)
@@ -481,8 +466,8 @@ async function handleNaturalLanguage(ctx: BotContext): Promise<void> {
   const configuredLimit = Number(ctx.env.NL_DAILY_LIMIT ?? 100)
   const limit = Number.isFinite(configuredLimit) ? Math.min(1000, Math.max(0, Math.floor(configuredLimit))) : 100
   try {
-    if (ctx.env.ANTHROPIC_API_KEY) {
-      const tool = await anthropicRoute(ctx, limit)
+    if (hasLanguageModelProvider(ctx.env)) {
+      const tool = await languageModelRoute(ctx, limit)
       if (tool) {
         const intent = await executeTool(ctx, tool)
         await saveConversationTurn(ctx.env, ctx.botId, ctx.user.id, ctx.update.update_id, ctx.text, intent).catch(() => undefined)

@@ -4,7 +4,7 @@ Hub multi-bots sur Cloudflare Workers (Hono + TypeScript), avec **Testeurprojets
 
 ## Fonctionnalités livrées
 
-Commandes : `/start`, `/aide`, `/stats` (`/projets`), `/liste <projet> [appareil=…] [ville=…] [depuis=AAAA-MM-JJ]`, `/derniers [n] [projet]`, `/recherche <texte> [projet]`, `/repartition <projet>`, `/export <projet>`, `/exporttout`, `/ouvrir <projet>`, `/fermer <projet>`, `/quota <projet> <n>`, `/sante`, `/liens`. Les dates sont interprétées dans `HUB_TIMEZONE`. La compréhension en français passe par Anthropic tool-use; Zod valide les arguments, le modèle ne reçoit aucune ligne de testeur et ne génère pas de faits. Si Anthropic est absent, indisponible ou au plafond quotidien, un routeur déterministe couvre les intentions principales et demande une clarification signée quand nécessaire.
+Commandes : `/start`, `/aide`, `/stats` (`/projets`), `/liste <projet> [appareil=…] [ville=…] [depuis=AAAA-MM-JJ]`, `/derniers [n] [projet]`, `/recherche <texte> [projet]`, `/repartition <projet>`, `/export <projet> [filtres]`, `/exporttout [filtres]`, `/ouvrir <projet>`, `/fermer <projet>`, `/quota <projet> <n>`, `/sante`, `/liens`. Les dates sont interprétées dans `HUB_TIMEZONE`. Le langage naturel est traité en français par un routeur d’outils compatible avec Anthropic, OpenAI ou Gemini (`NL_PROVIDER=auto` choisit le premier fournisseur configuré). Zod valide les arguments, le modèle ne reçoit aucune ligne de testeur et ne génère pas de faits. Si aucun fournisseur n’est configuré, s’il échoue ou si le plafond quotidien est atteint, un routeur déterministe couvre les intentions principales et demande une clarification signée quand nécessaire.
 
 Les statistiques, listes, recherches, répartitions et XLSX utilisent les Supabase déjà définis par les trois dépôts. `MonMenu` utilise `maximum_testers` comme objectif informatif et `registrations_open`; `Sophiate` utilise le plafond dur `max_testers` et `is_open`; `Vimsongre` utilise l’objectif informatif `recruitment_goal` et `is_open`. Les champs métier extra conservés sont `use_case` (Sophiate) et `test_target` (Vimsongre). L’export XLSX contient les colonnes réellement disponibles et neutralise les cellules qui commencent par un caractère de formule. Voir [l’audit source](docs/PROJECT_SOURCE_AUDIT.md).
 
@@ -22,6 +22,8 @@ Secrets à définir séparément avec Wrangler :
 pnpm exec wrangler secret put HUB_ADMIN_IDS
 pnpm exec wrangler secret put HUB_CALLBACK_SECRET
 pnpm exec wrangler secret put ANTHROPIC_API_KEY
+pnpm exec wrangler secret put OPENAI_API_KEY
+pnpm exec wrangler secret put GEMINI_API_KEY
 pnpm exec wrangler secret put BOT_TESTEURPROJETS_TOKEN
 pnpm exec wrangler secret put BOT_TESTEURPROJETS_WEBHOOK_SECRET
 pnpm exec wrangler secret put BOT_TESTEURPROJETS_WEBHOOK_PATH

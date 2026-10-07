@@ -6,10 +6,15 @@ export interface Env {
   HUB_ADMIN_IDS?: string
   HUB_CALLBACK_SECRET?: string
   HUB_TIMEZONE?: string
+  NL_PROVIDER?: string
   NL_MODEL?: string
   NL_DAILY_LIMIT?: string
   ANTHROPIC_API_KEY?: string
   ANTHROPIC_MODEL?: string
+  OPENAI_API_KEY?: string
+  OPENAI_MODEL?: string
+  GEMINI_API_KEY?: string
+  GEMINI_MODEL?: string
   DEFAULT_AI_MAX_TOKENS?: string
   BOT_REGISTRY_JSON?: string
   BOT_TESTEURPROJETS_TOKEN?: string
