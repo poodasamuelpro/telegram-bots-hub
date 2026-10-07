@@ -18,10 +18,22 @@
     "id": "REPLACE_WITH_HUB_KV_NAMESPACE_ID"
   }],
   "vars": {
-    "PUBLIC_BASE_URL": "https://telegram-bots-hub.<account>.workers.dev",
+    "PUBLIC_BASE_URL": "https://REPLACE_WITH_WORKER_DOMAIN",
     "HUB_TIMEZONE": "UTC",
     "NL_MODEL": "claude-haiku-4-5-20251001",
-    "NL_DAILY_LIMIT": "100"
+    "NL_DAILY_LIMIT": "100",
+    "MONMENU_SUPABASE_URL": "",
+    "MONMENU_SITE_URL": "",
+    "MONMENU_WHATSAPP_URL": "",
+    "MONMENU_ADMIN_URL": "",
+    "SOPHIATE_SUPABASE_URL": "",
+    "SOPHIATE_SITE_URL": "",
+    "SOPHIATE_WHATSAPP_URL": "",
+    "SOPHIATE_ADMIN_URL": "",
+    "VIMSONGRE_SUPABASE_URL": "",
+    "VIMSONGRE_SITE_URL": "",
+    "VIMSONGRE_WHATSAPP_URL": "",
+    "VIMSONGRE_ADMIN_URL": ""
   },
   "observability": { "logs": { "enabled": true, "invocation_logs": true } }
 }

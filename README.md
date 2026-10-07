@@ -1,68 +1,73 @@
 # Telegram Bots Hub
 
-Hub serverless Cloudflare Workers pour plusieurs bots Telegram indépendants. Le code est conçu pour dépasser dix bots : chaque bot possède son identifiant, son secret, son token, sa logique et ses états D1 propres.
+Hub multi-bots sur Cloudflare Workers (Hono + TypeScript), avec **Testeurprojets** comme bot principal (`@Testeurprojets_bot`). Le Worker ne sert que `POST /tg/<chemin-secret>`; les autres routes retournent 404. Les anciens modules et le binding D1 restent présents, mais le bot Testeurprojets ne lit ni n’écrit dans D1 et aucune migration D1 n’est requise.
 
-## Premier lot livré
+## Fonctionnalités livrées
 
-- Worker Hono TypeScript et endpoints `/health`, `/webhook/:botId`, `/admin`.
-- Trois logiques distinctes : `registration`, `ai-chat`, `test-bot`.
-- Vérification obligatoire de `X-Telegram-Bot-Api-Secret-Token`.
-- `allowed_updates` limité à `message` et `callback_query`.
-- Persistance D1 des événements, conversations et métriques.
-- KV prévu pour rate limiting/cache dans le lot suivant.
-- Rate limiting KV par bot et conversation.
-- Registre externe `BOT_REGISTRY_JSON` pour ajouter des bots sans modifier le routeur.
-- Adaptateurs isolés pour MonMenu, Sophiate et Vimsongre dans `src/projects.ts`.
-- Mémoire courte D1 par conversation pour le bot IA.
-- Modèle IA par défaut : `claude-haiku-4-5-20251001`, identifiant officiel actuel rapide/économique ; surcharge possible par `ANTHROPIC_MODEL`.
+Commandes : `/start`, `/aide`, `/stats` (`/projets`), `/liste <projet> [appareil=…] [ville=…] [depuis=AAAA-MM-JJ]`, `/derniers [n] [projet]`, `/recherche <texte> [projet]`, `/repartition <projet>`, `/export <projet>`, `/exporttout`, `/ouvrir <projet>`, `/fermer <projet>`, `/quota <projet> <n>`, `/sante`, `/liens`. Les dates sont interprétées dans `HUB_TIMEZONE`. La compréhension en français passe par Anthropic tool-use; Zod valide les arguments, le modèle ne reçoit aucune ligne de testeur et ne génère pas de faits. Si Anthropic est absent, indisponible ou au plafond quotidien, un routeur déterministe couvre les intentions principales et demande une clarification signée quand nécessaire.
 
-## Différences des projets sources
+Les statistiques, listes, recherches, répartitions et XLSX utilisent les Supabase déjà définis par les trois dépôts. `MonMenu` utilise `maximum_testers` comme objectif informatif et `registrations_open`; `Sophiate` utilise le plafond dur `max_testers` et `is_open`; `Vimsongre` utilise l’objectif informatif `recruitment_goal` et `is_open`. Les champs métier extra conservés sont `use_case` (Sophiate) et `test_target` (Vimsongre). L’export XLSX contient les colonnes réellement disponibles et neutralise les cellules qui commencent par un caractère de formule. Voir [l’audit source](docs/PROJECT_SOURCE_AUDIT.md).
 
-Les règles métier de MonMenu, Sophiate et Vimsongre sont **préservées**. Le hub ne normalise pas leurs limites : un adaptateur propre à chaque projet conservera les objectifs, plafonds, champs `device`, fonctions RPC et statuts propres à chaque dépôt.
+Les changements d’ouverture et de quota passent toujours par un bouton de confirmation signé; le minimum de quota est le nombre d’inscrits et le maximum est 500. Pour MonMenu/Vimsongre, la valeur reste un objectif, pas une limite d’inscription. Les valeurs callback sont HMAC, expirent après 5 minutes et sont à usage unique. Le webhook compare le secret Telegram en temps constant, n’accepte que l’admin autorisé en conversation privée, déduplique les updates et limite à 30 messages/minute. L’accusé HTTP 200 est rapide; le traitement et les exports s’exécutent avec `waitUntil`.
 
-Les adaptateurs encodent explicitement : MonMenu objectif sans plafond (20), Sophiate plafond dur (50), Vimsongre objectif sans plafond (20). Les URLs et tokens d’adaptateurs restent des secrets/configurations runtime.
+Les logs ne contiennent ni texte de message ni données de testeurs. KV conserve des clés de déduplication (24 h), limites quotidiennes (48 h), boutons (5 min) et au plus huit entrées d’historique admin (24 h), jamais les lignes lues dans Supabase. Les requêtes admin peuvent elles-mêmes contenir des termes de recherche; gardez `HUB_KV` privé. Cloudflare limite `waitUntil` à 30 secondes après la réponse HTTP; si les exports deviennent assez volumineux pour dépasser cette durée, il faudra un traitement Queue distinct.
 
-Pour ajouter 10 bots ou davantage, renseigner `BOT_REGISTRY_JSON` avec des objets `{ "id", "name", "logic", "enabled" }`. Les tokens et secrets suivent le même schéma `TELEGRAM_BOT_TOKEN_<ID>` / `TELEGRAM_WEBHOOK_SECRET_<ID>`.
+## Configuration
 
-L’enregistrement `/admin/webhooks/register` parcourt maintenant tout le registre actif, pas seulement les trois bots initiaux. Les adaptateurs sont consultables via `GET /admin/projects` et appelables par `POST /admin/projects/:project/:operation` après configuration de leur URL et token.
+Les fichiers [`.env.example`](.env.example) et [`.dev.vars.example`](.dev.vars.example) ne contiennent que les noms de variables, sans valeurs. Copiez `.dev.vars.example` vers `.dev.vars` pour le développement local; ce dernier est ignoré par Git. Les variables non secrètes (`PUBLIC_BASE_URL`, `HUB_TIMEZONE`, `NL_MODEL`, `NL_DAILY_LIMIT`, URLs Supabase/sites/liens) sont sous `vars` dans `wrangler.jsonc` ou dans les variables du tableau de bord Cloudflare. Le `wrangler` épinglé ici ne fournit pas de commande `wrangler vars put`; cela a été vérifié avec `wrangler --help`. Ne lancez pas une commande non disponible : modifiez `wrangler.jsonc` puis redéployez, ou utilisez le tableau de bord.
 
-## Installation
+Secrets à définir séparément avec Wrangler :
 
 ```bash
-pnpm install
-pnpm run typecheck
-pnpm run db:migrate:local
-pnpm run dev
+pnpm exec wrangler secret put HUB_ADMIN_IDS
+pnpm exec wrangler secret put HUB_CALLBACK_SECRET
+pnpm exec wrangler secret put ANTHROPIC_API_KEY
+pnpm exec wrangler secret put BOT_TESTEURPROJETS_TOKEN
+pnpm exec wrangler secret put BOT_TESTEURPROJETS_WEBHOOK_SECRET
+pnpm exec wrangler secret put BOT_TESTEURPROJETS_WEBHOOK_PATH
+pnpm exec wrangler secret put MONMENU_SUPABASE_SERVICE_KEY
+pnpm exec wrangler secret put SOPHIATE_SUPABASE_SERVICE_KEY
+pnpm exec wrangler secret put VIMSONGRE_SUPABASE_SERVICE_KEY
 ```
 
-Créer D1/KV puis remplacer les identifiants de `wrangler.jsonc`. Les secrets doivent être injectés avec Wrangler, jamais dans Git :
+`HUB_ADMIN_IDS` est la liste des identifiants Telegram autorisés, séparés par des virgules; pour une restriction au seul Samuel, renseignez uniquement son identifiant privé dans ce secret, sans le placer dans Git. `BOT_TESTEURPROJETS_ADMIN_IDS` est un override facultatif par bot. Générer `HUB_CALLBACK_SECRET`, le chemin webhook et le secret Telegram comme valeurs aléatoires fortes d’au moins 32 caractères autorisés (`A-Z`, `a-z`, chiffres, `_`, `-`). Ne journalisez ni ne commitez ces valeurs.
+
+## Vérifications locales
 
 ```bash
-pnpm wrangler secret put ADMIN_TOKEN
-pnpm wrangler secret put ANTHROPIC_API_KEY
-pnpm wrangler secret put TELEGRAM_BOT_TOKEN_REGISTRATION
-pnpm wrangler secret put TELEGRAM_WEBHOOK_SECRET_REGISTRATION
-pnpm wrangler secret put TELEGRAM_BOT_TOKEN_AI_CHAT
-pnpm wrangler secret put TELEGRAM_WEBHOOK_SECRET_AI_CHAT
-pnpm wrangler secret put TELEGRAM_BOT_TOKEN_TEST_BOT
-pnpm wrangler secret put TELEGRAM_WEBHOOK_SECRET_TEST_BOT
+pnpm install --frozen-lockfile
+pnpm typecheck
+pnpm lint
+pnpm test
 ```
 
-Puis configurer `PUBLIC_BASE_URL` et enregistrer les webhooks :
+CI exécute les mêmes vérifications sur `main`. Les tests couvrent les différences de schéma, les dates avec fuseau, le fallback naturel, l’échappement HTML et le conteneur XLSX. Pour développer : renseigner les bindings IDs dans `wrangler.jsonc`, renseigner `.dev.vars`, puis lancer `pnpm dev`.
 
-```bash
-curl -X POST "$PUBLIC_BASE_URL/admin/webhooks/register" \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
-```
+## Déploiement manuel
 
-Ne jamais copier les tokens Telegram, Anthropic ou GitHub dans une issue, un commit ou un fichier versionné.
+1. Dans `wrangler.jsonc`, remplacer les IDs placeholders par les IDs **existants** de D1 et `BOT_KV` (ils sont conservés, pas réinitialisés), créer/relier le namespace `HUB_KV` requis, et fixer `PUBLIC_BASE_URL` au domaine Worker réel. Aucun D1 neuf ne doit être créé et aucune migration D1 ne doit être appliquée par ce bot.
+2. Renseigner dans `vars` les URLs Supabase des trois projets, les URL de site/liens facultatives, `HUB_TIMEZONE` (identifiant IANA) et `NL_DAILY_LIMIT`. Les clés `service_role` restent des secrets.
+3. Injecter les secrets avec les commandes ci-dessus, puis déployer :
 
-## Sources techniques consultées
+   ```bash
+   pnpm exec wrangler deploy
+   ```
 
-- Telegram Bot API : `setWebhook`, secret token, `allowed_updates`, `sendMessage`, `answerCallbackQuery`.
-- Anthropic Models Overview : identifiants et choix de modèle Claude Haiku.
-- Cloudflare Workers : `ctx.waitUntil`, secrets Wrangler, bindings D1/KV.
+4. Pour enregistrer le webhook Telegram après le déploiement, placer temporairement les valeurs nécessaires dans `.dev.vars` (fichier ignoré) ou les exporter dans l’environnement, définir `PUBLIC_BASE_URL` sur le domaine déployé, puis exécuter :
 
-## Suivi complet du projet
+   ```bash
+   set -a
+   . ./.dev.vars
+   set +a
+   pnpm webhooks:register
+   ```
 
-Voir [`docs/PROJECT_STATUS_AND_ROADMAP.md`](docs/PROJECT_STATUS_AND_ROADMAP.md) pour l’état réel, les étapes manuelles, la procédure de configuration et les idées d’évolution.
+   Le script appelle `setWebhook` avec `secret_token`, `allowed_updates: ["message", "callback_query"]` et l’URL `/tg/<chemin-secret>`; il ne journalise ni token ni chemin. Il ne supprime pas les updates en attente.
+
+## Ajouter un bot
+
+Créer `src/bots/<nouveau-bot>/`, définir les secrets `BOT_<ID>_TOKEN`, `BOT_<ID>_WEBHOOK_SECRET`, `BOT_<ID>_WEBHOOK_PATH` et, si nécessaire, `BOT_<ID>_ADMIN_IDS`, puis ajouter une entrée d’une ligne dans `src/registry.ts` via `defineBot(...)` et un import dynamique du dossier du bot. Le routeur, la validation du webhook et le script `setWebhook` restent inchangés. Les adaptations futures de D1 et des autres bots legacy peuvent rester isolées.
+
+## Références officielles
+
+[Telegram Bot API](https://core.telegram.org/bots/api) · [Anthropic Messages API](https://platform.claude.com/docs/en/api/messages) · [Modèles Anthropic](https://platform.claude.com/docs/en/models/overview) · [Cloudflare `waitUntil`](https://developers.cloudflare.com/workers/runtime-apis/context/) · [Cloudflare KV writes](https://developers.cloudflare.com/kv/api/write-key-value-pairs/) · [Configuration Wrangler](https://developers.cloudflare.com/workers/wrangler/configuration/) · [Secrets Workers](https://developers.cloudflare.com/workers/configuration/secrets/).

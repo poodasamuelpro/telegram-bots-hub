@@ -64,7 +64,7 @@ function shortNonce(): string {
 }
 function helpText(): string {
   return [
-    '🧪 <b>Testeurprojets</b>',
+    '<b>Testeurprojets</b>',
     '/stats — inscrits, objectifs/quotas et état (alias /projets)',
     '/liste &lt;projet&gt; — liste récente, pages et filtres appareil=, ville=, depuis=',
     '/derniers [n] [projet] — 5 par défaut, 20 maximum',
@@ -141,7 +141,7 @@ async function showList(ctx: BotContext, project: ProjectConfig, filters: Tester
     if (hasNext) row.push({ text: 'Suivant ›', callback_data: await signed(ctx, `l|${stateId}|${page + 1}|${expiry}|${shortNonce()}`) })
     keyboard.push(row)
   }
-  await sendMessage(ctx.env, bot(ctx), ctx.chatId, `📋 <b>${project.label}</b> — page ${page + 1}\n\n${lines}`, keyboard)
+  await sendMessage(ctx.env, bot(ctx), ctx.chatId, `<b>${project.label}</b> — page ${page + 1}\n\n${lines}`, keyboard)
 }
 async function sendRecent(ctx: BotContext, raw: string): Promise<void> {
   const parts = raw.trim().split(/\s+/).filter(Boolean)
@@ -169,12 +169,12 @@ async function distribution(ctx: BotContext, project: ProjectConfig): Promise<vo
   const testers = await listAllTesters(ctx.env, project)
   const counts = (values: string[]) => values.reduce<Record<string, number>>((acc, value) => { const key = value || 'Non renseigné'; acc[key] = (acc[key] ?? 0) + 1; return acc }, {})
   const top = (map: Record<string, number>, max: number) => Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, max).map(([key, count]) => `• ${escapeHtml(key)} : ${count}`).join('\n') || '• —'
-  const sections = [`📱 <b>Appareil</b>\n${top(counts(testers.map((t) => t.device)), 10)}`, `📍 <b>Pays / ville (top 5)</b>\n${top(counts(testers.map((t) => t.country_city)), 5)}`]
+  const sections = [`<b>Appareil</b>\n${top(counts(testers.map((t) => t.device)), 10)}`, `<b>Pays / ville (top 5)</b>\n${top(counts(testers.map((t) => t.country_city)), 5)}`]
   for (const key of project.extraColumns) {
     const values = testers.map((t) => String(t.extra?.[key] ?? '')).filter(Boolean); const map = counts(values)
     if (Object.keys(map).length > 0 && Object.keys(map).length <= 10) sections.push(`<b>${escapeHtml(key === 'use_case' ? 'À tester' : 'Cible')}</b>\n${top(map, 10)}`)
   }
-  await sendMessage(ctx.env, bot(ctx), ctx.chatId, `📊 <b>${project.label} — ${testers.length} inscrits</b>\n\n${sections.join('\n\n')}`)
+  await sendMessage(ctx.env, bot(ctx), ctx.chatId, `<b>${project.label} — ${testers.length} inscrits</b>\n\n${sections.join('\n\n')}`)
 }
 async function confirmAction(ctx: BotContext, action: 'open' | 'close' | 'quota', project: ProjectConfig, value = 0): Promise<void> {
   const current = action === 'quota' ? await getOverview(ctx.env, project) : undefined
@@ -196,7 +196,7 @@ async function health(ctx: BotContext): Promise<void> {
     try { const result = await projectHealth(ctx.env, project); return `• <b>${project.label}</b> : Supabase OK (${result.dbMs} ms) · site ${result.site === null ? 'non configuré' : result.site ? 'OK' : 'injoignable'}` }
     catch { return `• <b>${project.label}</b> : Supabase injoignable` }
   }))
-  await sendMessage(ctx.env, bot(ctx), ctx.chatId, `🩺 <b>Santé</b>\n${results.join('\n')}`)
+  await sendMessage(ctx.env, bot(ctx), ctx.chatId, `<b>Santé</b>\n${results.join('\n')}`)
 }
 async function links(ctx: BotContext): Promise<void> {
   const lines = projectChoices.map((project) => {
@@ -232,7 +232,8 @@ async function runCommand(ctx: BotContext, command: string, args: string): Promi
   if (lower === 'quota') {
     const [slug, rawValue] = args.trim().split(/\s+/); const project = projectBySlug(slug ?? '')
     const value = Number(rawValue)
-    if (!project || !Number.isInteger(value)) throw new HubError(project ? 'invalid_quota' : 'unknown_project')
+    if (!Number.isInteger(value)) throw new HubError('invalid_quota')
+    if (!project) { await askProject(ctx, 'quota', { value }); return 'quota_project_choice' }
     await confirmAction(ctx, 'quota', project, value); return 'confirm_quota'
   }
   if (lower === 'sante' || lower === 'health') { await health(ctx); return 'sante' }
@@ -296,12 +297,12 @@ async function handleCallback(ctx: BotContext): Promise<string> {
     await answerCallback(ctx.env, bot(ctx), callback.id)
     if (action === 'open' || action === 'close') {
       const open = action === 'open'; await setOpen(ctx.env, project, open)
-      await sendMessage(ctx.env, bot(ctx), ctx.chatId, `✅ Inscriptions ${open ? 'ouvertes' : 'fermées'} pour ${project.label}.`)
+      await sendMessage(ctx.env, bot(ctx), ctx.chatId, `Inscriptions ${open ? 'ouvertes' : 'fermées'} pour ${project.label}.`)
     } else {
       const current = await getOverview(ctx.env, project)
       if (!Number.isInteger(value) || value < current.enrolled || value > 500) throw new HubError('invalid_quota')
       await updateTarget(ctx.env, project, value)
-      await sendMessage(ctx.env, bot(ctx), ctx.chatId, `✅ ${project.label} : ${current.goalOnly ? 'objectif' : 'quota'} réglé à ${value}.`)
+      await sendMessage(ctx.env, bot(ctx), ctx.chatId, `${project.label} : ${current.goalOnly ? 'objectif' : 'quota'} réglé à ${value}.`)
     }
     return 'settings_updated'
   }
@@ -431,7 +432,7 @@ function mentionedProject(text: string): ProjectConfig | undefined {
   const normalized = normalize(text)
   return projectChoices.find((project) => normalized.includes(project.slug) || normalized.includes(normalize(project.label)))
 }
-function fallbackIntent(text: string): { command: string; args: string } | undefined {
+export function fallbackIntent(text: string): { command: string; args: string } | undefined {
   const value = normalize(text); const project = mentionedProject(text); const slug = project?.slug ?? ''
   if (/\b(ouvre|ouvrir|ouvrir les|reouvrir|reactiver)\b/.test(value)) return { command: 'ouvrir', args: slug }
   if (/\b(ferme les|fermer|ferme|cloturer|desactive)\b/.test(value)) return { command: 'fermer', args: slug }
@@ -441,17 +442,17 @@ function fallbackIntent(text: string): { command: string; args: string } | undef
   }
   if (/\b(sante|health|etat du site|site fonctionne)\b/.test(value)) return { command: 'sante', args: '' }
   if (/\b(lien|liens|whatsapp|espace admin)\b/.test(value)) return { command: 'liens', args: '' }
-  if (/\b(export|excel|xlsx|telecharger|fichier)\b/.test(value)) return /\b(tous les projets|tout|toutes les bases)\b/.test(value) ? { command: 'exporttout', args: '' } : { command: 'export', args: slug }
+  if (/\b(exporte?|exporter|excel|xlsx|telecharger|fichier)\b/.test(value)) return /\b(tous les projets|tout|toutes les bases)\b/.test(value) ? { command: 'exporttout', args: '' } : { command: 'export', args: slug }
   if (/\b(repartition|distribution|par appareil|par ville)\b/.test(value)) return { command: 'repartition', args: slug }
   if (/\b(dernier|derniers|recemment|recent)\b/.test(value)) return { command: 'derniers', args: `5 ${slug}`.trim() }
   const search = value.match(/\b(?:cherche|recherche|trouve|chercher)\s+(?:un|une|le|la|les)?\s*(.+)/)
   if (search?.[1]) {
     let query = search[1].trim()
-    if (project) query = query.replace(new RegExp(project.slug, 'g'), '').trim()
+    if (project) query = query.replace(new RegExp(`\\b(?:sur|dans|de|du|des|pour)\\s+${project.slug}\\b`, 'g'), '').replace(new RegExp(`\\b${project.slug}\\b`, 'g'), '').trim()
     if (query) return { command: 'recherche', args: `${query} ${slug}`.trim() }
   }
-  if (/\b(liste|inscrits|testeurs|qui est|qui sont)\b/.test(value)) return { command: 'liste', args: slug }
   if (/\b(stat|stats|statistique|combien|inscrit|inscriptions|effectif|ouvert|ferme)\b/.test(value)) return { command: 'stats', args: '' }
+  if (/\b(liste|inscrits|testeurs|qui est|qui sont)\b/.test(value)) return { command: 'liste', args: slug }
   return undefined
 }
 
