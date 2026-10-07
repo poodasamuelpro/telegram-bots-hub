@@ -1,8 +1,9 @@
 import { Hono } from 'hono'
 import type { Env, TelegramUpdate } from './types'
-import { getBot } from './bots'
+import { resolveBot, configuredBots } from './bot-config'
 import { answerCallback, getWebhookInfo, isTelegramUpdate, sendMessage, setWebhook, verifyWebhook } from './telegram'
 import { getState, recordError, recordEvent, recordSent, saveState } from './store'
+import { allowTelegramMessage } from './limits'
 
 const app = new Hono<{ Bindings: Env }>()
 
@@ -17,7 +18,7 @@ app.get('/health', (c) => c.json({ ok: true, service: 'telegram-bots-hub', times
 
 app.post('/webhook/:botId', async (c) => {
   const botId = c.req.param('botId')
-  const bot = getBot(botId)
+  const bot = resolveBot(c.env, botId)
   if (!bot) return jsonError('Bot inconnu.', 404)
   if (!verifyWebhook(c.req.raw, c.env, botId)) return jsonError('Webhook non authentifié.', 401)
   let update: unknown
@@ -28,6 +29,7 @@ app.post('/webhook/:botId', async (c) => {
   const chatId = message?.chat.id != null ? String(message.chat.id) : ''
   const user = telegramUpdate.message?.from || telegramUpdate.callback_query?.from
   const text = telegramUpdate.message?.text?.trim() || telegramUpdate.callback_query?.data?.trim() || ''
+  if (chatId && !(await allowTelegramMessage(c.env, botId, chatId))) return jsonError('Trop de messages. Réessaie dans une minute.', 429)
   c.executionCtx.waitUntil(recordEvent(c.env, botId, telegramUpdate, telegramUpdate.callback_query ? 'callback_query' : 'message', chatId, user?.id).catch(() => recordError(c.env, botId)))
   if (!chatId) return c.json({ ok: true, ignored: true })
   try {
@@ -49,8 +51,8 @@ app.post('/webhook/:botId', async (c) => {
 
 app.get('/admin', (c) => {
   if (!adminAuthorized(c)) return jsonError('Non autorisé.', 401)
-  const cards = Object.values({ registration: 1, 'ai-chat': 1, 'test-bot': 1 }).map((_, i) => i)
-  return c.html(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Telegram Bots Hub</title><style>body{font:16px system-ui;max-width:960px;margin:40px auto;padding:0 20px;color:#172033}h1{color:#0f766e}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}.card{border:1px solid #d7dee8;border-radius:12px;padding:18px;background:#fff}.ok{color:#047857}code{background:#eef2f7;padding:2px 5px;border-radius:4px}</style></head><body><h1>Telegram Bots Hub</h1><p>Registre extensible, webhooks sécurisés et métriques D1.</p><div class="grid">${cards.map((i) => `<div class="card"><strong>${['registration','ai-chat','test-bot'][i]}</strong><p class="ok">Logique active</p><code>/webhook/${['registration','ai-chat','test-bot'][i]}</code></div>`).join('')}</div><p>Utilise <code>POST /admin/webhooks/register</code> avec le Bearer admin pour enregistrer les webhooks.</p></body></html>`)
+  const bots = configuredBots(c.env)
+  return c.html(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Telegram Bots Hub</title><style>body{font:16px system-ui;max-width:960px;margin:40px auto;padding:0 20px;color:#172033}h1{color:#0f766e}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}.card{border:1px solid #d7dee8;border-radius:12px;padding:18px;background:#fff}.ok{color:#047857}code{background:#eef2f7;padding:2px 5px;border-radius:4px}</style></head><body><h1>Telegram Bots Hub</h1><p>Registre extensible, webhooks sécurisés, rate limiting KV et métriques D1.</p><div class="grid">${bots.map((bot) => `<div class="card"><strong>${bot.name}</strong><p class="ok">${bot.enabled ? 'Logique active' : 'Désactivé'}</p><small>${bot.id} · ${bot.logic}</small><br><code>/webhook/${bot.id}</code></div>`).join('')}</div><p>Utilise <code>POST /admin/webhooks/register</code> avec le Bearer admin pour enregistrer les webhooks.</p></body></html>`)
 })
 app.get('/admin/webhooks/:botId', async (c) => { if (!adminAuthorized(c)) return jsonError('Non autorisé.', 401); try { return c.json({ ok: true, botId: c.req.param('botId'), info: await getWebhookInfo(c.env, c.req.param('botId')) }) } catch (e) { return jsonError(e instanceof Error ? e.message : 'Erreur Telegram.', 502) } })
 app.post('/admin/webhooks/register', async (c) => {
@@ -63,6 +65,6 @@ app.post('/admin/webhooks/register', async (c) => {
   }
   return c.json({ ok: Object.values(results).every((v) => v === 'registered'), results })
 })
-app.get('/admin/bots', (c) => { if (!adminAuthorized(c)) return jsonError('Non autorisé.', 401); return c.json({ ok: true, bots: ['registration', 'ai-chat', 'test-bot'] }) })
+app.get('/admin/bots', (c) => { if (!adminAuthorized(c)) return jsonError('Non autorisé.', 401); return c.json({ ok: true, bots: configuredBots(c.env) }) })
 
 export default app

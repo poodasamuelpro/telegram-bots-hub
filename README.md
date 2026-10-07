@@ -10,11 +10,18 @@ Hub serverless Cloudflare Workers pour plusieurs bots Telegram indépendants. Le
 - `allowed_updates` limité à `message` et `callback_query`.
 - Persistance D1 des événements, conversations et métriques.
 - KV prévu pour rate limiting/cache dans le lot suivant.
+- Rate limiting KV par bot et conversation.
+- Registre externe `BOT_REGISTRY_JSON` pour ajouter des bots sans modifier le routeur.
+- Adaptateurs isolés pour MonMenu, Sophiate et Vimsongre dans `src/projects.ts`.
 - Modèle IA par défaut : `claude-haiku-4-5-20251001`, identifiant officiel actuel rapide/économique ; surcharge possible par `ANTHROPIC_MODEL`.
 
 ## Différences des projets sources
 
 Les règles métier de MonMenu, Sophiate et Vimsongre sont **préservées**. Le hub ne normalise pas leurs limites : un adaptateur propre à chaque projet conservera les objectifs, plafonds, champs `device`, fonctions RPC et statuts propres à chaque dépôt.
+
+Les adaptateurs encodent explicitement : MonMenu objectif sans plafond (20), Sophiate plafond dur (50), Vimsongre objectif sans plafond (20). Les URLs et tokens d’adaptateurs restent des secrets/configurations runtime.
+
+Pour ajouter 10 bots ou davantage, renseigner `BOT_REGISTRY_JSON` avec des objets `{ "id", "name", "logic", "enabled" }`. Les tokens et secrets suivent le même schéma `TELEGRAM_BOT_TOKEN_<ID>` / `TELEGRAM_WEBHOOK_SECRET_<ID>`.
 
 ## Installation
 

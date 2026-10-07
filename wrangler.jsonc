@@ -16,7 +16,8 @@
   "vars": {
     "PUBLIC_BASE_URL": "https://telegram-bots-hub.<account>.workers.dev",
     "ANTHROPIC_MODEL": "claude-haiku-4-5-20251001",
-    "DEFAULT_AI_MAX_TOKENS": "700"
+    "DEFAULT_AI_MAX_TOKENS": "700",
+    "BOT_REGISTRY_JSON": "[]"
   },
   "observability": { "logs": { "enabled": true, "invocation_logs": true } }
 }
