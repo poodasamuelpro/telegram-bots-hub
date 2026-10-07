@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { escapeHtml, constantTimeEqual, safeIntent } from '../src/core/security'
 import { PROJECTS } from '../src/projects.config'
 import { createWorkbook } from '../src/core/xlsx'
-import { fallbackIntent, localMidnightUtc, parseListArgs } from '../src/bots/testeurprojets'
+import { fallbackIntent, localMidnightUtc, parseExportArgs, parseListArgs } from '../src/bots/testeurprojets'
 import type { Tester } from '../src/core/supabase'
 
 describe('adaptateurs des projets bêta', () => {
@@ -28,6 +28,14 @@ describe('dates et filtres', () => {
     const result = parseListArgs('monmenu appareil=android ville=Ouagadougou depuis=2026-01-01', 'America/Los_Angeles')
     expect(result.project?.slug).toBe('monmenu')
     expect(result.filters).toEqual({ device: 'android', city: 'Ouagadougou', since: '2026-01-01T08:00:00.000Z' })
+  })
+  it('parse les mêmes filtres pour un export et rejette un projet inconnu', () => {
+    expect(parseExportArgs('sophiate appareil=computer ville=Paris depuis=2026-01-01', 'UTC')).toEqual({
+      project: PROJECTS.sophiate,
+      filters: { device: 'computer', city: 'Paris', since: '2026-01-01T00:00:00.000Z' },
+    })
+    expect(parseExportArgs('appareil=ios depuis=2026-01-01', 'UTC').filters.device).toBe('ios')
+    expect(() => parseExportArgs('sophiaat', 'UTC')).toThrow('unknown_project')
   })
 })
 

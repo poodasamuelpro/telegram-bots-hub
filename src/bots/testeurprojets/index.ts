@@ -92,6 +92,13 @@ export function parseListArgs(raw: string, timezone = 'UTC'): { project?: Projec
   }
   return { project, filters }
 }
+export function parseExportArgs(raw: string, timezone = 'UTC'): { project?: ProjectConfig; filters: TesterFilter } {
+  const parsed = parseListArgs(raw, timezone)
+  const parts = raw.trim().split(/\s+/).filter(Boolean)
+  const hasUnknownProject = parts.some((part) => !part.includes('=') && !projectBySlug(part.toLowerCase()))
+  if (hasUnknownProject) throw new HubError('unknown_project')
+  return parsed
+}
 function testerLine(tester: Tester, project: ProjectConfig, timezone: string): string {
   const extra = project.extraColumns.map((key) => {
     const label = key === 'use_case' ? 'À tester' : key === 'test_target' ? 'Cible' : key
@@ -185,8 +192,8 @@ async function confirmAction(ctx: BotContext, action: 'open' | 'close' | 'quota'
   const verb = action === 'open' ? 'ouvrir' : action === 'close' ? 'fermer' : `fixer l’objectif/maximum à ${value}`
   await sendMessage(ctx.env, bot(ctx), ctx.chatId, `Confirme-tu de <b>${verb}</b> les inscriptions de ${project.label} ?`, [[{ text: 'Confirmer', callback_data: data }, { text: 'Annuler', callback_data: await signed(ctx, `x|${expiry}|${shortNonce()}`) }]])
 }
-async function exportProjects(ctx: BotContext, projects: ProjectConfig[]): Promise<void> {
-  const sheets = await Promise.all(projects.map(async (project) => ({ project, testers: await listAllTesters(ctx.env, project) })))
+async function exportProjects(ctx: BotContext, projects: ProjectConfig[], filters: TesterFilter = {}): Promise<void> {
+  const sheets = await Promise.all(projects.map(async (project) => ({ project, testers: await listAllTesters(ctx.env, project, filters) })))
   const bytes = createWorkbook(sheets)
   const date = new Intl.DateTimeFormat('en-CA', { timeZone: String(ctx.env.HUB_TIMEZONE || 'UTC'), year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
   const name = projects.length === 1 ? `beta-${projects[0]!.slug}-${date}.xlsx` : `beta-tout-${date}.xlsx`
@@ -241,10 +248,10 @@ async function runCommand(ctx: BotContext, command: string, args: string): Promi
   if (lower === 'sante' || lower === 'health') { await health(ctx); return 'sante' }
   if (lower === 'liens') { await links(ctx); return 'liens' }
   if (lower === 'export' || lower === 'exporttout') {
-    if (lower === 'exporttout') { await exportProjects(ctx, projectChoices); return 'export_tout' }
-    const project = projectBySlug(args.trim().split(/\s+/)[0] ?? '')
-    if (!project) { await askProject(ctx, 'export'); return 'export_project_choice' }
-    await exportProjects(ctx, [project]); return 'export'
+    const { project, filters } = parseExportArgs(args, String(ctx.env.HUB_TIMEZONE || 'UTC'))
+    if (lower === 'exporttout') { await exportProjects(ctx, projectChoices, filters); return 'export_tout' }
+    if (!project) { await askProject(ctx, 'export', { filters }); return 'export_project_choice' }
+    await exportProjects(ctx, [project], filters); return 'export'
   }
   await sendMessage(ctx.env, bot(ctx), ctx.chatId, `Commande inconnue. Utilise /aide.\nExemple : « combien on a de monde sur MonMenu ? »`)
   return 'unknown_command'
@@ -345,8 +352,8 @@ const ToolSchemas: Record<string, z.ZodTypeAny> = {
   derniers: z.object({ project: ProjectArg.optional(), count: z.number().int().min(1).max(20).optional() }).strict(),
   recherche: z.object({ query: z.string().min(1).max(120), project: ProjectArg.optional() }).strict(),
   repartition: z.object({ project: ProjectArg.optional() }).strict(),
-  export: z.object({ project: ProjectArg.optional() }).strict(),
-  export_tout: z.object({}).strict(),
+  export: z.object({ project: ProjectArg.optional(), device: z.string().max(40).optional(), city: z.string().max(100).optional(), since: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }).strict(),
+  export_tout: z.object({ device: z.string().max(40).optional(), city: z.string().max(100).optional(), since: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }).strict(),
   ouvrir: z.object({ project: ProjectArg.optional() }).strict(),
   fermer: z.object({ project: ProjectArg.optional() }).strict(),
   quota: z.object({ project: ProjectArg.optional(), value: z.number().int().min(1).max(500) }).strict(),
@@ -360,8 +367,8 @@ const ToolDefinitions = [
   { name: 'derniers', description: 'Lire les inscriptions les plus récentes.', input_schema: { type: 'object', properties: { project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre'] }, count: { type: 'integer', minimum: 1, maximum: 20 } }, additionalProperties: false } },
   { name: 'recherche', description: 'Rechercher un testeur par nom, e-mail ou WhatsApp.', input_schema: { type: 'object', properties: { query: { type: 'string' }, project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre'] } }, required: ['query'], additionalProperties: false } },
   { name: 'repartition', description: 'Calculer la répartition par appareil, ville et champs projet.', input_schema: { type: 'object', properties: { project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre'] } }, additionalProperties: false } },
-  { name: 'export', description: 'Exporter un projet en fichier XLSX.', input_schema: { type: 'object', properties: { project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre'] } }, additionalProperties: false } },
-  { name: 'export_tout', description: 'Exporter les trois projets dans un classeur XLSX.', input_schema: { type: 'object', properties: {}, additionalProperties: false } },
+  { name: 'export', description: 'Exporter un projet en fichier XLSX avec filtres facultatifs.', input_schema: { type: 'object', properties: { project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre'] }, device: { type: 'string' }, city: { type: 'string' }, since: { type: 'string', description: 'Date locale AAAA-MM-JJ dans HUB_TIMEZONE.' } }, additionalProperties: false } },
+  { name: 'export_tout', description: 'Exporter les trois projets dans un classeur XLSX avec filtres facultatifs.', input_schema: { type: 'object', properties: { device: { type: 'string' }, city: { type: 'string' }, since: { type: 'string', description: 'Date locale AAAA-MM-JJ dans HUB_TIMEZONE.' } }, additionalProperties: false } },
   { name: 'ouvrir', description: 'Demander confirmation pour ouvrir les inscriptions.', input_schema: { type: 'object', properties: { project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre'] } }, additionalProperties: false } },
   { name: 'fermer', description: 'Demander confirmation pour fermer les inscriptions.', input_schema: { type: 'object', properties: { project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre'] } }, additionalProperties: false } },
   { name: 'quota', description: 'Demander confirmation pour changer le quota ou objectif.', input_schema: { type: 'object', properties: { project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre'] }, value: { type: 'integer', minimum: 1, maximum: 500 } }, required: ['value'], additionalProperties: false } },
@@ -414,8 +421,9 @@ async function executeTool(ctx: BotContext, tool: RoutedTool): Promise<string> {
   if (tool.name === 'aide') return runCommand(ctx, 'aide', '')
   if (tool.name === 'sante') return runCommand(ctx, 'sante', '')
   if (tool.name === 'liens') return runCommand(ctx, 'liens', '')
-  if (tool.name === 'export_tout') return runCommand(ctx, 'exporttout', '')
-  if (tool.name === 'export') return runCommand(ctx, 'export', suffix.trim())
+  const filterArgs = [input.device ? `appareil=${String(input.device)}` : '', input.city ? `ville=${String(input.city)}` : '', input.since ? `depuis=${String(input.since)}` : ''].filter(Boolean).join(' ')
+  if (tool.name === 'export_tout') return runCommand(ctx, 'exporttout', filterArgs)
+  if (tool.name === 'export') return runCommand(ctx, 'export', [suffix.trim(), filterArgs].filter(Boolean).join(' '))
   if (tool.name === 'ouvrir' || tool.name === 'fermer') return runCommand(ctx, tool.name, suffix.trim())
   if (tool.name === 'quota') {
     if (!project) { await askProject(ctx, 'quota', { value: Number(input.value) }); return 'quota_project_choice' }
