@@ -4,6 +4,7 @@ import { resolveBot, configuredBots } from './bot-config'
 import { answerCallback, getWebhookInfo, isTelegramUpdate, sendMessage, setWebhook, verifyWebhook } from './telegram'
 import { getState, recordError, recordEvent, recordSent, saveState } from './store'
 import { allowTelegramMessage } from './limits'
+import { PROJECT_ADAPTERS, callProjectAdapter, type ProjectId } from './projects'
 
 const app = new Hono<{ Bindings: Env }>()
 
@@ -40,7 +41,8 @@ app.post('/webhook/:botId', async (c) => {
       c.executionCtx.waitUntil(recordSent(c.env, botId))
     }
     if (telegramUpdate.callback_query) c.executionCtx.waitUntil(answerCallback(c.env, botId, telegramUpdate.callback_query.id).catch(() => undefined))
-    await saveState(c.env, botId, chatId, { ...state, lastText: text, lastUpdateId: telegramUpdate.update_id })
+    const nextHistory = bot.logic === 'ai_chat' && response.text ? [...(Array.isArray(state.history) ? state.history : []), { role: 'user', content: text }, { role: 'assistant', content: response.text }].slice(-10) : state.history
+    await saveState(c.env, botId, chatId, { ...state, ...(nextHistory ? { history: nextHistory } : {}), lastText: text, lastUpdateId: telegramUpdate.update_id })
     return c.json({ ok: true })
   } catch (error) {
     c.executionCtx.waitUntil(recordError(c.env, botId))
@@ -60,11 +62,20 @@ app.post('/admin/webhooks/register', async (c) => {
   const baseUrl = c.env.PUBLIC_BASE_URL
   if (!baseUrl || baseUrl.includes('<account>')) return jsonError('PUBLIC_BASE_URL doit être configurée.', 500)
   const results: Record<string, string> = {}
-  for (const id of ['registration', 'ai-chat', 'test-bot']) {
+  for (const { id, enabled } of configuredBots(c.env)) {
+    if (!enabled) continue
     try { await setWebhook(c.env, id, baseUrl); results[id] = 'registered' } catch (e) { results[id] = e instanceof Error ? e.message : 'failed' }
   }
   return c.json({ ok: Object.values(results).every((v) => v === 'registered'), results })
 })
 app.get('/admin/bots', (c) => { if (!adminAuthorized(c)) return jsonError('Non autorisé.', 401); return c.json({ ok: true, bots: configuredBots(c.env) }) })
+app.get('/admin/projects', (c) => { if (!adminAuthorized(c)) return jsonError('Non autorisé.', 401); return c.json({ ok: true, projects: Object.values(PROJECT_ADAPTERS) }) })
+app.post('/admin/projects/:project/:operation', async (c) => {
+  if (!adminAuthorized(c)) return jsonError('Non autorisé.', 401)
+  const project = c.req.param('project') as ProjectId
+  if (!Object.hasOwn(PROJECT_ADAPTERS, project)) return jsonError('Projet inconnu.', 404)
+  try { return c.json({ ok: true, result: await callProjectAdapter(c.env, project, c.req.param('operation'), await c.req.json().catch(() => ({}))) }) }
+  catch (error) { return jsonError(error instanceof Error ? error.message : 'Adaptateur indisponible.', 502) }
+})
 
 export default app
