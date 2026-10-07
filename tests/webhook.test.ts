@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import app from '../src/index'
 import { BOT_REGISTRY } from '../src/registry'
-import { isAuthorizedPrivateUpdate, TelegramUpdateSchema } from '../src/core/security'
+import { isAuthorizedPrivateUpdate, REQUIRED_ADMIN_ID, TelegramUpdateSchema } from '../src/core/security'
 import type { Env } from '../src/types'
 
 const path = 'A'.repeat(32)
@@ -39,8 +39,14 @@ describe('whitelist privée', () => {
     expect(isAuthorizedPrivateUpdate(update(42, 'group'), env, BOT_REGISTRY.testeurprojets!)).toBe(false)
   })
   it('utilise la whitelist propre au bot lorsqu’elle est définie', () => {
-    const specific = { ...env, BOT_TESTEURPROJETS_ADMIN_IDS: '7' } as Env
+    const specific = { ...env, HUB_ADMIN_IDS: '', BOT_TESTEURPROJETS_ADMIN_IDS: '7' } as Env
     expect(isAuthorizedPrivateUpdate(update(7, 'private'), specific, BOT_REGISTRY.testeurprojets!)).toBe(true)
     expect(isAuthorizedPrivateUpdate(update(42, 'private'), specific, BOT_REGISTRY.testeurprojets!)).toBe(false)
+  })
+  it('autorise toujours Samuel et permet seulement les IDs explicitement ajoutés', () => {
+    expect(REQUIRED_ADMIN_ID).toBe('6730264801')
+    expect(isAuthorizedPrivateUpdate(update(6730264801, 'private'), env, BOT_REGISTRY.testeurprojets!)).toBe(true)
+    expect(isAuthorizedPrivateUpdate(update(99, 'private'), { ...env, HUB_ADMIN_IDS: '99' } as Env, BOT_REGISTRY.testeurprojets!)).toBe(true)
+    expect(isAuthorizedPrivateUpdate(update(100, 'private'), env, BOT_REGISTRY.testeurprojets!)).toBe(false)
   })
 })

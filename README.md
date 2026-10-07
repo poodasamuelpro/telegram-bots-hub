@@ -1,6 +1,6 @@
 # Telegram Bots Hub
 
-Hub multi-bots sur Cloudflare Workers (Hono + TypeScript), avec **Testeurprojets** comme bot principal (`@Testeurprojets_bot`). Le Worker ne sert que `POST /tg/<chemin-secret>`; les autres routes retournent 404. Les anciens modules et le binding D1 restent présents, mais le bot Testeurprojets ne lit ni n’écrit dans D1 et aucune migration D1 n’est requise.
+Hub multi-bots sur Cloudflare Workers (Hono + TypeScript), avec **Testeurprojets** comme bot principal (`@Testeurprojets_bot`). Le Worker ne sert que `POST /tg/<chemin-secret>`; les autres routes retournent 404. **D1, KV et le socle multi-bot sont conservés volontairement pour les futurs bots et pour la décision d’architecture du propriétaire du dépôt.** Le bot Testeurprojets utilise actuellement `HUB_KV` pour son état court et ses contrôles, sans supprimer les modules D1/KV existants.
 
 ## Fonctionnalités livrées
 
@@ -30,7 +30,7 @@ pnpm exec wrangler secret put SOPHIATE_SUPABASE_SERVICE_KEY
 pnpm exec wrangler secret put VIMSONGRE_SUPABASE_SERVICE_KEY
 ```
 
-`HUB_ADMIN_IDS` est la liste des identifiants Telegram autorisés, séparés par des virgules; pour une restriction au seul Samuel, renseignez uniquement son identifiant privé dans ce secret, sans le placer dans Git. `BOT_TESTEURPROJETS_ADMIN_IDS` est un override facultatif par bot. Générer `HUB_CALLBACK_SECRET`, le chemin webhook et le secret Telegram comme valeurs aléatoires fortes d’au moins 32 caractères autorisés (`A-Z`, `a-z`, chiffres, `_`, `-`). Ne journalisez ni ne commitez ces valeurs.
+L’identifiant Telegram `6730264801` est toujours autorisé, uniquement en conversation privée. Aucun autre identifiant ne fonctionne par défaut. Pour ajouter explicitement un administrateur, ajoutez son identifiant dans `HUB_ADMIN_IDS` (ou dans `BOT_TESTEURPROJETS_ADMIN_IDS` pour ce bot), séparé par des virgules. Ces listes s’ajoutent à l’ID obligatoire de Samuel ; elles ne le remplacent jamais. Générer `HUB_CALLBACK_SECRET`, le chemin webhook et le secret Telegram comme valeurs aléatoires fortes d’au moins 32 caractères autorisés (`A-Z`, `a-z`, chiffres, `_`, `-`). Ne journalisez ni ne commitez ces valeurs.
 
 ## Vérifications locales
 

