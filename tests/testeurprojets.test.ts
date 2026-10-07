@@ -38,6 +38,7 @@ describe('repli déterministe du langage naturel', () => {
   })
   it('reconnaît les consultations, recherches et exports explicites', () => {
     expect(fallbackIntent('Combien de testeurs sont inscrits ?')?.command).toBe('stats')
+    expect(fallbackIntent('Combien de testeurs sur MonMenu ?')).toEqual({ command: 'stats', args: 'monmenu' })
     expect(fallbackIntent('Cherche Alice sur Sophiate')).toEqual({ command: 'recherche', args: 'alice sophiate' })
     expect(fallbackIntent('Exporte tous les projets')?.command).toBe('exporttout')
     expect(fallbackIntent('Affiche les derniers inscrits sur MonMenu')?.args).toBe('5 monmenu')

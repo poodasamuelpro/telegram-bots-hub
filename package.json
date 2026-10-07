@@ -2,6 +2,7 @@
   "name": "telegram-bots-hub",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.25.0",
   "type": "module",
   "description": "Hub multi-bots Telegram serverless sur Cloudflare Workers",
   "scripts": {

@@ -65,7 +65,7 @@ function shortNonce(): string {
 function helpText(): string {
   return [
     '<b>Testeurprojets</b>',
-    '/stats — inscrits, objectifs/quotas et état (alias /projets)',
+    '/stats [projet] — inscrits, objectifs/quotas et état (alias /projets)',
     '/liste &lt;projet&gt; — liste récente, pages et filtres appareil=, ville=, depuis=',
     '/derniers [n] [projet] — 5 par défaut, 20 maximum',
     '/recherche &lt;texte&gt; [projet] — 10 résultats maximum',
@@ -113,17 +113,18 @@ function bot(ctx: BotContext) {
   // The registry is static; secrets are selected by the manifest in the runtime router.
   return { id: ctx.botId, name: 'Testeurprojets', tokenEnv: 'BOT_TESTEURPROJETS_TOKEN', webhookSecretEnv: 'BOT_TESTEURPROJETS_WEBHOOK_SECRET', webhookPathEnv: 'BOT_TESTEURPROJETS_WEBHOOK_PATH', handle: async () => {} }
 }
-async function sendStats(ctx: BotContext): Promise<void> {
-  const outcomes = await Promise.all(projectChoices.map(async (project) => ({ project, result: await getOverview(ctx.env, project).then((value) => ({ value })).catch(() => ({ error: true })) })))
-  let enrolled = 0; let target = 0; let remaining = 0; let ok = 0
+async function sendStats(ctx: BotContext, selected?: ProjectConfig): Promise<void> {
+  const projects = selected ? [selected] : projectChoices
+  const outcomes = await Promise.all(projects.map(async (project) => ({ project, result: await getOverview(ctx.env, project).then((value) => ({ value })).catch(() => ({ error: true })) })))
+  let enrolled = 0; let remaining = 0; let ok = 0
   const lines = outcomes.map(({ project, result }) => {
     if ('error' in result) return `• <b>${project.label}</b> — indisponible`
-    const item = result.value; ok++; enrolled += item.enrolled; target += item.target; remaining += item.remaining
+    const item = result.value; ok++; enrolled += item.enrolled; remaining += item.remaining
     const targetLabel = item.goalOnly ? 'objectif' : 'max'
     const remainingLabel = item.goalOnly ? 'écart objectif' : 'places'
     return `• <b>${project.label}</b> : ${item.enrolled}/${targetLabel === 'max' ? item.target : `objectif ${item.target}`} · ${remainingLabel} ${item.remaining} · ${item.isOpen ? 'ouvert' : 'fermé'}`
   })
-  lines.push(ok ? `\nTotal : ${enrolled} inscrits · ${remaining} ${ok === projectChoices.length ? 'places/écarts cumulés' : 'places/écarts connus'}` : '\nAucun projet joignable.')
+  lines.push(ok ? `\nTotal : ${enrolled} inscrits · ${remaining} ${ok === projects.length ? 'places/écarts cumulés' : 'places/écarts connus'}` : '\nAucun projet joignable.')
   await sendMessage(ctx.env, bot(ctx), ctx.chatId, lines.join('\n'))
 }
 async function showList(ctx: BotContext, project: ProjectConfig, filters: TesterFilter, page: number): Promise<void> {
@@ -211,7 +212,7 @@ async function links(ctx: BotContext): Promise<void> {
 async function runCommand(ctx: BotContext, command: string, args: string): Promise<string> {
   const lower = command.toLowerCase()
   if (lower === 'start' || lower === 'aide' || lower === 'help') { await sendMessage(ctx.env, bot(ctx), ctx.chatId, helpText()); return 'help' }
-  if (lower === 'stats' || lower === 'projets') { await sendStats(ctx); return 'stats' }
+  if (lower === 'stats' || lower === 'projets') { await sendStats(ctx, projectBySlug(args.trim().split(/\s+/)[0] ?? '')); return 'stats' }
   if (lower === 'liste') {
     const { project, filters } = parseListArgs(args, String(ctx.env.HUB_TIMEZONE || 'UTC'))
     if (!project) { await askProject(ctx, 'list', filters); return 'list_project_choice' }
@@ -232,9 +233,10 @@ async function runCommand(ctx: BotContext, command: string, args: string): Promi
   if (lower === 'quota') {
     const [slug, rawValue] = args.trim().split(/\s+/); const project = projectBySlug(slug ?? '')
     const value = Number(rawValue)
-    if (!Number.isInteger(value)) throw new HubError('invalid_quota')
-    if (!project) { await askProject(ctx, 'quota', { value }); return 'quota_project_choice' }
-    await confirmAction(ctx, 'quota', project, value); return 'confirm_quota'
+    const amount = project ? value : Number(rawValue ?? slug)
+    if (!Number.isInteger(amount) || amount < 1 || amount > 500) throw new HubError('invalid_quota')
+    if (!project) { await askProject(ctx, 'quota', { value: amount }); return 'quota_project_choice' }
+    await confirmAction(ctx, 'quota', project, amount); return 'confirm_quota'
   }
   if (lower === 'sante' || lower === 'health') { await health(ctx); return 'sante' }
   if (lower === 'liens') { await links(ctx); return 'liens' }
@@ -253,7 +255,10 @@ async function handleCallback(ctx: BotContext): Promise<string> {
   if (!callback?.data) return 'callback_empty'
   const values = await verifyCallback(ctx, callback.data)
   if (!values) { await answerCallback(ctx.env, bot(ctx), callback.id, 'Bouton invalide ou expiré.'); return 'callback_invalid' }
-  if (values[0] === 'x') { await markCallbackUsed(ctx.env, values.at(-1) ?? ''); await answerCallback(ctx.env, bot(ctx), callback.id, 'Action annulée.'); return 'cancel' }
+  if (values[0] === 'x') {
+    if (!(await markCallbackUsed(ctx.env, values.at(-1) ?? ''))) { await answerCallback(ctx.env, bot(ctx), callback.id, 'Bouton déjà utilisé.'); return 'callback_replayed' }
+    await answerCallback(ctx.env, bot(ctx), callback.id, 'Action annulée.'); return 'cancel'
+  }
   const nonce = values.at(-1) ?? ''
   if (!(await markCallbackUsed(ctx.env, nonce))) { await answerCallback(ctx.env, bot(ctx), callback.id, 'Bouton déjà utilisé.'); return 'callback_replayed' }
   if (values[0] === 'n') {
@@ -335,7 +340,7 @@ export async function handleTesteurProjets(ctx: BotContext): Promise<void> {
 
 const ProjectArg = z.enum(['monmenu', 'sophiate', 'vimsongre'])
 const ToolSchemas: Record<string, z.ZodTypeAny> = {
-  stats: z.object({}).strict(),
+  stats: z.object({ project: ProjectArg.optional() }).strict(),
   liste: z.object({ project: ProjectArg.optional(), device: z.string().max(40).optional(), city: z.string().max(100).optional(), since: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }).strict(),
   derniers: z.object({ project: ProjectArg.optional(), count: z.number().int().min(1).max(20).optional() }).strict(),
   recherche: z.object({ query: z.string().min(1).max(120), project: ProjectArg.optional() }).strict(),
@@ -350,7 +355,7 @@ const ToolSchemas: Record<string, z.ZodTypeAny> = {
   aide: z.object({}).strict(),
 }
 const ToolDefinitions = [
-  { name: 'stats', description: 'Lire les statistiques de tous les projets.', input_schema: { type: 'object', properties: {}, additionalProperties: false } },
+  { name: 'stats', description: 'Lire les statistiques de tous les projets ou d’un projet choisi.', input_schema: { type: 'object', properties: { project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre'] } }, additionalProperties: false } },
   { name: 'liste', description: 'Lister les testeurs inscrits, avec filtres facultatifs.', input_schema: { type: 'object', properties: { project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre'] }, device: { type: 'string' }, city: { type: 'string' }, since: { type: 'string', description: 'Date locale AAAA-MM-JJ dans HUB_TIMEZONE.' } }, additionalProperties: false } },
   { name: 'derniers', description: 'Lire les inscriptions les plus récentes.', input_schema: { type: 'object', properties: { project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre'] }, count: { type: 'integer', minimum: 1, maximum: 20 } }, additionalProperties: false } },
   { name: 'recherche', description: 'Rechercher un testeur par nom, e-mail ou WhatsApp.', input_schema: { type: 'object', properties: { query: { type: 'string' }, project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre'] } }, required: ['query'], additionalProperties: false } },
@@ -405,7 +410,7 @@ async function executeTool(ctx: BotContext, tool: RoutedTool): Promise<string> {
   const slug = typeof input.project === 'string' ? input.project : ''
   const project = projectBySlug(slug)
   const suffix = project ? ` ${project.slug}` : ''
-  if (tool.name === 'stats') return runCommand(ctx, 'stats', '')
+  if (tool.name === 'stats') return runCommand(ctx, 'stats', suffix.trim())
   if (tool.name === 'aide') return runCommand(ctx, 'aide', '')
   if (tool.name === 'sante') return runCommand(ctx, 'sante', '')
   if (tool.name === 'liens') return runCommand(ctx, 'liens', '')
@@ -451,7 +456,7 @@ export function fallbackIntent(text: string): { command: string; args: string } 
     if (project) query = query.replace(new RegExp(`\\b(?:sur|dans|de|du|des|pour)\\s+${project.slug}\\b`, 'g'), '').replace(new RegExp(`\\b${project.slug}\\b`, 'g'), '').trim()
     if (query) return { command: 'recherche', args: `${query} ${slug}`.trim() }
   }
-  if (/\b(stat|stats|statistique|combien|inscrit|inscriptions|effectif|ouvert|ferme)\b/.test(value)) return { command: 'stats', args: '' }
+  if (/\b(stat|stats|statistique|combien|inscrit|inscriptions|effectif|ouvert|ferme)\b/.test(value)) return { command: 'stats', args: slug }
   if (/\b(liste|inscrits|testeurs|qui est|qui sont)\b/.test(value)) return { command: 'liste', args: slug }
   return undefined
 }
