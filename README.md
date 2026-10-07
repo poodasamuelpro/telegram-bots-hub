@@ -62,3 +62,7 @@ Ne jamais copier les tokens Telegram, Anthropic ou GitHub dans une issue, un com
 - Telegram Bot API : `setWebhook`, secret token, `allowed_updates`, `sendMessage`, `answerCallbackQuery`.
 - Anthropic Models Overview : identifiants et choix de modèle Claude Haiku.
 - Cloudflare Workers : `ctx.waitUntil`, secrets Wrangler, bindings D1/KV.
+
+## Suivi complet du projet
+
+Voir [`docs/PROJECT_STATUS_AND_ROADMAP.md`](docs/PROJECT_STATUS_AND_ROADMAP.md) pour l’état réel, les étapes manuelles, la procédure de configuration et les idées d’évolution.
