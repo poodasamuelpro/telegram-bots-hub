@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "telegram-bots-hub",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-07",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "telegram-bots-hub",
+    "database_id": "REPLACE_WITH_D1_DATABASE_ID"
+  }],
+  "kv_namespaces": [{
+    "binding": "BOT_KV",
+    "id": "REPLACE_WITH_KV_NAMESPACE_ID"
+  }],
+  "vars": {
+    "PUBLIC_BASE_URL": "https://telegram-bots-hub.<account>.workers.dev",
+    "ANTHROPIC_MODEL": "claude-haiku-4-5-20251001",
+    "DEFAULT_AI_MAX_TOKENS": "700"
+  },
+  "observability": { "logs": { "enabled": true, "invocation_logs": true } }
+}
