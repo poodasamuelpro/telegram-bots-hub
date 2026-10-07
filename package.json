@@ -8,15 +8,21 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit --noUnusedLocals --noUnusedParameters",
+    "test": "vitest run",
     "db:migrate:local": "wrangler d1 migrations apply telegram-bots-hub --local",
     "db:migrate:remote": "wrangler d1 migrations apply telegram-bots-hub --remote",
     "webhooks:register": "tsx scripts/register-webhooks.ts"
   },
-  "dependencies": { "hono": "^4.9.0" },
+  "dependencies": {
+    "hono": "4.13.13",
+    "zod": "3.23.8"
+  },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20261007.1",
-    "tsx": "^4.20.0",
-    "typescript": "^5.8.0",
-    "wrangler": "^4.148.0"
+    "@cloudflare/workers-types": "5.20261005.1",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "vitest": "2.1.9",
+    "wrangler": "4.147.0"
   }
 }
