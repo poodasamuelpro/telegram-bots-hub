@@ -47,7 +47,7 @@ CI exécute les mêmes vérifications sur `main`. Les tests couvrent les différ
 
 ## Déploiement manuel
 
-1. Dans `wrangler.jsonc`, remplacer les placeholders par les IDs **réels** de la base D1 et du namespace `BOT_KV` existants (ils sont conservés, pas réinitialisés), créer/relier le namespace `HUB_KV` requis, et fixer `PUBLIC_BASE_URL` au domaine Worker réel. Cloudflare vérifie l’existence des IDs : une valeur inventée échoue avec l’erreur 10042. Aucun D1 neuf ne doit être créé et aucune migration D1 ne doit être appliquée par ce bot.
+1. Le dépôt peut être déployé temporairement sans IDs D1/KV : la configuration n’envoie plus les placeholders invalides. Sans `BOT_KV`/`HUB_KV`, les données passent en mémoire, sont perdues au redémarrage et ne sont pas partagées entre instances; ce mode est réservé aux tests et n’est pas adapté à la production. Pour la persistance, ajouter les IDs **réels** des namespaces existants et créer/relier `HUB_KV`. D1 est actuellement absent des parcours actifs; les fonctions historiques qui le requièrent ne fonctionneront pas sans binding. Une valeur inventée échoue chez Cloudflare (erreur 10042).
 2. Renseigner dans `vars` les URLs Supabase des trois projets, les URL de site/liens facultatives, `HUB_TIMEZONE` (identifiant IANA) et `NL_DAILY_LIMIT`. Les clés `service_role` restent des secrets.
 3. Injecter les secrets avec les commandes ci-dessus, puis déployer :
 
@@ -55,7 +55,7 @@ CI exécute les mêmes vérifications sur `main`. Les tests couvrent les différ
    pnpm deploy
    ```
 
-   Le script vérifie d’abord que les placeholders ont été remplacés. Si Cloudflare Workers Builds appelle directement `npx wrangler deploy`, configurez sa commande de déploiement à `pnpm deploy` pour obtenir ce contrôle préalable.
+   Le script signale les bindings absents et le mode éphémère. Si Cloudflare Workers Builds appelle directement `npx wrangler deploy`, cette configuration sans IDs placeholders permet aussi de passer l’étape de validation des ressources KV/D1.
 
 4. Pour enregistrer le webhook Telegram après le déploiement, placer temporairement les valeurs nécessaires dans `.dev.vars` (fichier ignoré) ou les exporter dans l’environnement, définir `PUBLIC_BASE_URL` sur le domaine déployé, puis exécuter :
 

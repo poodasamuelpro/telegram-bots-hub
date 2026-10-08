@@ -1,4 +1,5 @@
 import type { ConversationTurn, Env } from '../types'
+import { hubKV } from '../runtime-kv'
 
 const DAY = 86_400
 const RATE_LIMIT = 30
@@ -10,8 +11,8 @@ async function digest(value: string): Promise<string> {
 
 export async function claimUpdate(env: Env, botId: string, updateId: number): Promise<boolean> {
   const key = `dedup:${botId}:${updateId}`
-  if (await env.HUB_KV.get(key)) return false
-  await env.HUB_KV.put(key, '1', { expirationTtl: DAY })
+  if (await hubKV(env).get(key)) return false
+  await hubKV(env).put(key, '1', { expirationTtl: DAY })
   return true
 }
 
@@ -19,8 +20,8 @@ export async function allowAdminMessage(env: Env, botId: string, userId: number,
   const minute = Math.floor(Date.now() / 60_000)
   const who = await digest(`${botId}:${userId}`)
   const prefix = `rate:${botId}:${who}:${minute}:`
-  await env.HUB_KV.put(`${prefix}${updateId}`, '1', { expirationTtl: 120 })
-  const result = await env.HUB_KV.list({ prefix, limit: RATE_LIMIT + 1 })
+  await hubKV(env).put(`${prefix}${updateId}`, '1', { expirationTtl: 120 })
+  const result = await hubKV(env).list({ prefix, limit: RATE_LIMIT + 1 })
   return result.keys.length <= RATE_LIMIT
 }
 
@@ -28,18 +29,18 @@ export async function allowAiCall(env: Env, botId: string, userId: number, updat
   const day = new Date().toISOString().slice(0, 10)
   const who = await digest(`${botId}:${userId}`)
   const prefix = `ai:${botId}:${who}:${day}:`
-  await env.HUB_KV.put(`${prefix}${updateId}`, '1', { expirationTtl: DAY * 2 })
-  const result = await env.HUB_KV.list({ prefix, limit: Math.max(1, limit + 1) })
+  await hubKV(env).put(`${prefix}${updateId}`, '1', { expirationTtl: DAY * 2 })
+  const result = await hubKV(env).list({ prefix, limit: Math.max(1, limit + 1) })
   return result.keys.length <= limit
 }
 
 export async function readConversation(env: Env, botId: string, userId: number): Promise<ConversationTurn[]> {
   const who = await digest(`${botId}:${userId}`)
   const prefix = `ctx:${botId}:${who}:`
-  const result = await env.HUB_KV.list({ prefix, limit: 8 })
+  const result = await hubKV(env).list({ prefix, limit: 8 })
   const turns: ConversationTurn[] = []
   for (const item of result.keys) {
-    const raw = await env.HUB_KV.get(item.name)
+    const raw = await hubKV(env).get(item.name)
     if (!raw) continue
     try {
       const value = JSON.parse(raw) as ConversationTurn
@@ -54,12 +55,12 @@ export async function saveConversationTurn(env: Env, botId: string, userId: numb
   const reverseTime = String(9_999_999_999_999 - Date.now()).padStart(13, '0')
   const key = `ctx:${botId}:${who}:${reverseTime}:${updateId}`
   const value: ConversationTurn = { user: user.slice(0, 240), intent: intent.slice(0, 40), at: Date.now() }
-  await env.HUB_KV.put(key, JSON.stringify(value), { expirationTtl: DAY })
+  await hubKV(env).put(key, JSON.stringify(value), { expirationTtl: DAY })
 }
 
 export async function markCallbackUsed(env: Env, nonce: string): Promise<boolean> {
   const key = `callback-used:${nonce}`
-  if (await env.HUB_KV.get(key)) return false
-  await env.HUB_KV.put(key, '1', { expirationTtl: 300 })
+  if (await hubKV(env).get(key)) return false
+  await hubKV(env).put(key, '1', { expirationTtl: 300 })
   return true
 }

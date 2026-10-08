@@ -1,7 +1,7 @@
 export interface Env {
-  DB: D1Database
-  BOT_KV: KVNamespace
-  HUB_KV: KVNamespace
+  DB?: D1Database
+  BOT_KV?: KVNamespace
+  HUB_KV?: KVNamespace
   PUBLIC_BASE_URL?: string
   HUB_ADMIN_IDS?: string
   HUB_CALLBACK_SECRET?: string

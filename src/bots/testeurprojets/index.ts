@@ -4,6 +4,7 @@ import type { ProjectSlug } from '../../projects.config'
 import { HubError } from '../../types'
 import { PROJECTS, type ProjectConfig } from '../../projects.config'
 import { allowAiCall, markCallbackUsed, saveConversationTurn } from '../../core/state'
+import { hubKV } from '../../runtime-kv'
 import { answerCallback, sendDocument, sendMessage } from '../../core/telegram'
 import { constantTimeEqual, escapeHtml, safeIntent } from '../../core/security'
 import { createWorkbook } from '../../core/xlsx'
@@ -112,7 +113,7 @@ async function askProject(ctx: BotContext, action: string, state?: unknown): Pro
   const buttons: InlineKeyboard = []
   for (const project of projectChoices) {
     const nonce = shortNonce()
-    if (state) await ctx.env.HUB_KV.put(`choice-state:${nonce}`, JSON.stringify(state), { expirationTtl: 300 })
+    if (state) await hubKV(ctx.env).put(`choice-state:${nonce}`, JSON.stringify(state), { expirationTtl: 300 })
     buttons.push([{ text: project.label, callback_data: await signed(ctx, `p|${action}|${slugChar[project.slug]}|${Math.floor(Date.now() / 1000) + 300}|${nonce}`) }])
   }
   await sendMessage(ctx.env, bot(ctx), ctx.chatId, 'Choisis le projet :', buttons)
@@ -143,7 +144,7 @@ async function showList(ctx: BotContext, project: ProjectConfig, filters: Tester
   const keyboard: InlineKeyboard = []
   if (page > 0 || hasNext) {
     const stateId = shortNonce()
-    await ctx.env.HUB_KV.put(`list-state:${stateId}`, JSON.stringify({ project: project.slug, filters }), { expirationTtl: 300 })
+    await hubKV(ctx.env).put(`list-state:${stateId}`, JSON.stringify({ project: project.slug, filters }), { expirationTtl: 300 })
     const expiry = Math.floor(Date.now() / 1000) + 300
     const row = []
     if (page > 0) row.push({ text: '‹ Précédent', callback_data: await signed(ctx, `l|${stateId}|${page - 1}|${expiry}|${shortNonce()}`) })
@@ -283,8 +284,8 @@ async function handleCallback(ctx: BotContext): Promise<string> {
     const action = values[1] ?? 'list'
     if (!project) { await answerCallback(ctx.env, bot(ctx), callback.id, 'Projet invalide.'); return 'callback_invalid_project' }
     await answerCallback(ctx.env, bot(ctx), callback.id)
-    const rawState = await ctx.env.HUB_KV.get(`choice-state:${nonce}`)
-    if (rawState) await ctx.env.HUB_KV.delete(`choice-state:${nonce}`)
+    const rawState = await hubKV(ctx.env).get(`choice-state:${nonce}`)
+    if (rawState) await hubKV(ctx.env).delete(`choice-state:${nonce}`)
     const saved = rawState ? JSON.parse(rawState) as { filters?: TesterFilter; value?: number } : {}
     if (action === 'list') {
       await showList(ctx, project, saved.filters ?? (saved as TesterFilter), 0)
@@ -297,7 +298,7 @@ async function handleCallback(ctx: BotContext): Promise<string> {
     return action
   }
   if (values[0] === 'l') {
-    const id = values[1] ?? ''; const page = Number(values[2]); const raw = await ctx.env.HUB_KV.get(`list-state:${id}`)
+    const id = values[1] ?? ''; const page = Number(values[2]); const raw = await hubKV(ctx.env).get(`list-state:${id}`)
     if (!raw || !Number.isInteger(page) || page < 0) { await answerCallback(ctx.env, bot(ctx), callback.id, 'Cette page a expiré.'); return 'list_expired' }
     const state = JSON.parse(raw) as { project: string; filters: TesterFilter }; const project = projectBySlug(state.project)
     if (!project) { await answerCallback(ctx.env, bot(ctx), callback.id, 'Projet invalide.'); return 'list_invalid_project' }
