@@ -5,6 +5,15 @@
   "compatibility_date": "2026-10-07",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "telegram-bots-hub",
+    "database_id": "90a06077-b0a9-42de-9b4e-1fa55c7f462e"
+  }],
+  "kv_namespaces": [{
+    "binding": "HUB_KV",
+    "id": "c564d92e3cfc46cf9f8ea43835a2dd15"
+  }],
   "vars": {
     "PUBLIC_BASE_URL": "https://REPLACE_WITH_WORKER_DOMAIN",
     "HUB_TIMEZONE": "UTC",
