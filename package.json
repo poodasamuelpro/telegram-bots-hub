@@ -7,7 +7,7 @@
   "description": "Hub multi-bots Telegram serverless sur Cloudflare Workers",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "deploy": "node scripts/check-cloudflare-config.mjs && wrangler deploy",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit --noUnusedLocals --noUnusedParameters",
     "test": "vitest run",

@@ -43,17 +43,19 @@ pnpm lint
 pnpm test
 ```
 
-CI exécute les mêmes vérifications sur `main`. Les tests couvrent les différences de schéma, les dates avec fuseau, le fallback naturel, l’échappement HTML et le conteneur XLSX. Pour développer : renseigner les bindings IDs dans `wrangler.jsonc`, renseigner `.dev.vars`, puis lancer `pnpm dev`.
+CI exécute les mêmes vérifications sur `main`. Les tests couvrent les différences de schéma, les dates avec fuseau, le fallback naturel, l’échappement HTML et le conteneur XLSX. Pour développer : renseigner les vrais IDs des bindings dans `wrangler.jsonc`, renseigner `.dev.vars`, puis lancer `pnpm dev`.
 
 ## Déploiement manuel
 
-1. Dans `wrangler.jsonc`, remplacer les IDs placeholders par les IDs **existants** de D1 et `BOT_KV` (ils sont conservés, pas réinitialisés), créer/relier le namespace `HUB_KV` requis, et fixer `PUBLIC_BASE_URL` au domaine Worker réel. Aucun D1 neuf ne doit être créé et aucune migration D1 ne doit être appliquée par ce bot.
+1. Dans `wrangler.jsonc`, remplacer les placeholders par les IDs **réels** de la base D1 et du namespace `BOT_KV` existants (ils sont conservés, pas réinitialisés), créer/relier le namespace `HUB_KV` requis, et fixer `PUBLIC_BASE_URL` au domaine Worker réel. Cloudflare vérifie l’existence des IDs : une valeur inventée échoue avec l’erreur 10042. Aucun D1 neuf ne doit être créé et aucune migration D1 ne doit être appliquée par ce bot.
 2. Renseigner dans `vars` les URLs Supabase des trois projets, les URL de site/liens facultatives, `HUB_TIMEZONE` (identifiant IANA) et `NL_DAILY_LIMIT`. Les clés `service_role` restent des secrets.
 3. Injecter les secrets avec les commandes ci-dessus, puis déployer :
 
    ```bash
-   pnpm exec wrangler deploy
+   pnpm deploy
    ```
+
+   Le script vérifie d’abord que les placeholders ont été remplacés. Si Cloudflare Workers Builds appelle directement `npx wrangler deploy`, configurez sa commande de déploiement à `pnpm deploy` pour obtenir ce contrôle préalable.
 
 4. Pour enregistrer le webhook Telegram après le déploiement, placer temporairement les valeurs nécessaires dans `.dev.vars` (fichier ignoré) ou les exporter dans l’environnement, définir `PUBLIC_BASE_URL` sur le domaine déployé, puis exécuter :
 
