@@ -47,7 +47,7 @@ CI exécute les mêmes vérifications sur `main`. Les tests couvrent les différ
 
 ## Déploiement manuel
 
-1. `wrangler.jsonc` référence maintenant le D1 existant via `DB` et le namespace KV persistant via `HUB_KV`. `BOT_KV` reste facultatif pour le parcours actif; sans lui, le helper concerné utilise un stockage mémoire temporaire. D1 est configuré, mais les fonctions historiques qui le lisent ne sont pas appelées par le bot actif. Ne remplacez pas ces IDs par des valeurs fictives : Cloudflare vérifie l’existence des ressources (erreur 10042).
+1. `wrangler.jsonc` référence le D1 existant via `DB` et les deux namespaces KV persistants via `HUB_KV` et `BOT_KV`. D1 est configuré, mais les fonctions historiques qui le lisent ne sont pas appelées par le bot actif. Ne remplacez pas ces IDs par des valeurs fictives : Cloudflare vérifie l’existence des ressources (erreur 10042).
 2. Renseigner dans `vars` les URLs Supabase des trois projets, les URL de site/liens facultatives, `HUB_TIMEZONE` (identifiant IANA) et `NL_DAILY_LIMIT`. Les clés `service_role` restent des secrets.
 3. Injecter les secrets avec les commandes ci-dessus, puis déployer :
 
@@ -80,7 +80,7 @@ Il n’y a pas de tableau de bord web métier à utiliser : **Telegram est le ta
 6. Les actions `ouvrir`, `fermer` et `quota` ne modifient rien immédiatement : le bot envoie un bouton signé. La modification n’est faite qu’après clic sur **Confirmer**.
 7. `/liste`, `/recherche`, `/derniers`, `/repartition`, `/stats` et `/sante` lisent les trois Supabase avec leurs adaptateurs de schéma respectifs.
 8. `/export monmenu appareil=android ville=Ouagadougou depuis=2026-01-01` et `/exporttout` produisent un `.xlsx` avec les filtres demandés. Les champs `extra` propres au projet deviennent des colonnes et les cellules commençant par `=`, `+`, `-` ou `@` sont neutralisées.
-9. Les états courts, les nonces de boutons, l’historique limité et les compteurs IA utilisent le binding `HUB_KV` avec expiration. `BOT_KV` et D1 restent disponibles pour les fonctionnalités historiques ou futures; le bot actif utilise Supabase pour les projets et `HUB_KV` pour ses états temporaires.
+9. Les états courts, les nonces de boutons, l’historique limité et les compteurs IA utilisent le binding `HUB_KV` avec expiration. `BOT_KV` est aussi configuré pour le limiteur historique/futur; D1 reste disponible pour les modules historiques, tandis que le bot actif utilise Supabase pour les données des projets.
 10. En cas d’absence, de panne ou de dépassement du fournisseur IA, le routeur déterministe français prend le relais ; les commandes Telegram restent toujours disponibles.
 
 Dans le tableau de bord Cloudflare : **Workers & Pages → Worker → Settings → Variables and Secrets** pour les variables/secrets, **Bindings** pour D1/KV, **Deployments** pour les versions, et **Logs/Observability** pour diagnostiquer les codes d’erreur sans données personnelles.

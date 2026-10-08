@@ -13,6 +13,9 @@
   "kv_namespaces": [{
     "binding": "HUB_KV",
     "id": "c564d92e3cfc46cf9f8ea43835a2dd15"
+  }, {
+    "binding": "BOT_KV",
+    "id": "8f72ec4dd3864c709ba8a084960a16b8"
   }],
   "vars": {
     "PUBLIC_BASE_URL": "https://REPLACE_WITH_WORKER_DOMAIN",
