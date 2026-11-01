@@ -12,6 +12,19 @@ describe('adaptateurs des projets bêta', () => {
     expect(PROJECTS.vimsongre.goalOnly).toBe(true)
     expect(PROJECTS.sophiate.extraColumns).toContain('use_case')
     expect(PROJECTS.vimsongre.extraColumns).toContain('test_target')
+    expect(PROJECTS.izicard.goalOnly).toBe(true)
+    expect(PROJECTS.izicard.envPrefix).toBe('IZICARD')
+    expect(PROJECTS.izicard.extraColumns).toEqual(['google_email', 'already_client'])
+    expect(PROJECTS.izicard.overviewRpc).toBe('beta_overview')
+    expect(PROJECTS.izicard.openRpc).toBe('beta_set_open')
+  })
+})
+
+describe('IziCard dans le bot', () => {
+  it('« combien on a de monde sur IziCard » désigne bien IziCard, et fermer/ouvrir aussi', () => {
+    expect(fallbackIntent('ferme les inscriptions IziCard')).toEqual({ command: 'fermer', args: 'izicard' })
+    expect(fallbackIntent('Fixe l’objectif de IziCard à 30')).toEqual({ command: 'quota', args: 'izicard 30' })
+    expect(fallbackIntent('exporte izicard')).toEqual({ command: 'export', args: 'izicard' })
   })
 })
 

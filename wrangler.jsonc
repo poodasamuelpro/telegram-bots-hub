@@ -34,7 +34,11 @@
     "VIMSONGRE_SUPABASE_URL": "",
     "VIMSONGRE_SITE_URL": "",
     "VIMSONGRE_WHATSAPP_URL": "",
-    "VIMSONGRE_ADMIN_URL": ""
+    "VIMSONGRE_ADMIN_URL": "",
+    "IZICARD_SUPABASE_URL": "https://thsedbhzhonemdhbndpf.supabase.co",
+    "IZICARD_SITE_URL": "https://izicardouaga.com",
+    "IZICARD_WHATSAPP_URL": "https://chat.whatsapp.com/CWrj794P4cf5jvMPKYAEwH?s=cl&p=a&iam=2",
+    "IZICARD_ADMIN_URL": ""
   },
   "observability": { "logs": { "enabled": true, "invocation_logs": true } }
 }

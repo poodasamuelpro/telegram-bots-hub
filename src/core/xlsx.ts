@@ -1,5 +1,5 @@
 import type { Tester } from './supabase'
-import type { ProjectConfig } from '../projects.config'
+import { extraLabel, type ProjectConfig } from '../projects.config'
 
 const encoder = new TextEncoder()
 const esc = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;')
@@ -55,7 +55,7 @@ function zipStore(files: { path: string; content: string }[]): Uint8Array {
   return concat([...local, centralBytes, end])
 }
 function rowsFor(project: ProjectConfig, testers: Tester[]): string[][] {
-  const extra = project.extraColumns.map((key) => key === 'use_case' ? 'À tester' : key === 'test_target' ? 'Cible' : key)
+  const extra = project.extraColumns.map((key) => extraLabel(key))
   const header = ['Nom complet', 'E-mail', 'WhatsApp', 'Pays / ville', 'Appareil', ...extra, 'Consentement le', 'Inscrit le']
   const rows = testers.map((tester) => [tester.full_name, tester.email, tester.whatsapp, tester.country_city, tester.device, ...project.extraColumns.map((key) => String(tester.extra?.[key] ?? '')), tester.consent_at, tester.created_at])
   return [header, ...rows]

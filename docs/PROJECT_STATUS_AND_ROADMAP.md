@@ -318,3 +318,6 @@ Le hub pourra être considéré comme prêt lorsque les points suivants seront v
 - [ ] procédure de restauration documentée ;
 - [ ] aucun secret dans Git ;
 - [ ] validation métier finale effectuée.
+
+## Ajout du projet IziCard — 2026-11-01
+Quatrième projet du bot Testeurprojets (code, tests et configuration poussés ; 54 tests passent, vérification de types propre). **Reste manuel** : `pnpm exec wrangler secret put IZICARD_SUPABASE_SERVICE_KEY`, puis redéployer le hub. Côté site IziCard : secrets `TELEGRAM_BOT_TOKEN` (le même bot) et `TELEGRAM_ADMIN_CHAT_ID`. Non vérifié : envoi réel sur Telegram.

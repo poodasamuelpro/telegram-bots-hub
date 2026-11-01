@@ -1,4 +1,4 @@
-export type ProjectSlug = 'monmenu' | 'sophiate' | 'vimsongre'
+export type ProjectSlug = 'monmenu' | 'sophiate' | 'vimsongre' | 'izicard'
 
 export type ProjectConfig = {
   slug: ProjectSlug
@@ -44,6 +44,25 @@ export const PROJECTS: Record<ProjectSlug, ProjectConfig> = {
     settingsKeyColumn: 'singleton', settingsKeyValue: 'true', goalOnly: true,
     extraColumns: ['test_target'], devices: ['Android', 'iOS', 'Ordinateur'],
   },
+  izicard: {
+    slug: 'izicard', label: 'IziCard', envPrefix: 'IZICARD',
+    overviewRpc: 'beta_overview', openRpc: 'beta_set_open', openArg: 'p_is_open',
+    countField: 'registered', targetField: 'goal', openField: 'is_open',
+    targetColumn: 'recruitment_goal', openColumn: 'is_open',
+    settingsKeyColumn: 'singleton', settingsKeyValue: 'true', goalOnly: true,
+    extraColumns: ['google_email', 'already_client'], devices: ['Android', 'iOS'],
+  },
+}
+
+/** Libellé lisible d'un champ propre à un projet (colonnes « extra »). */
+export function extraLabel(key: string): string {
+  const labels: Record<string, string> = {
+    use_case: 'À tester',
+    test_target: 'Cible',
+    google_email: 'Compte Google',
+    already_client: 'Déjà client',
+  }
+  return labels[key] ?? key
 }
 
 export function projectFromSlug(value: string | undefined): ProjectConfig | undefined {

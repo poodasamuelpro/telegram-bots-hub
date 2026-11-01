@@ -10,3 +10,5 @@ Vimsongre — tables `beta_testers`, `beta_settings`, `beta_rate_limits`; extra 
 Vimsongre — RPC `beta_overview`, `beta_register`, `beta_set_open`, `beta_rate_limit`; le goal est informatif, seul `is_open` bloque l’inscription.
 Vimsongre — appareils `Android`, `iOS`, `Ordinateur`; route existante lit les mêmes colonnes, consentement horodaté et contrôle de débit côté projet.
 Le hub conserve ces différences; l’action « quota » ajuste l’objectif MonMenu/Vimsongre ou le plafond Sophiate, après confirmation et avec minimum = inscrits, maximum = 500.
+
+IziCard (ajouté le 2026-11-01) — tables `beta_testers`, `beta_settings` dans la base Supabase IziCard ; RPC `beta_overview`, `beta_register`, `beta_set_open` ; objectif informatif `recruitment_goal` (20), seul `is_open` bloque l’inscription ; appareils `Android`, `iOS` ; extra `google_email`, `already_client`. Notification à chaque inscription envoyée par le site (secrets `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ADMIN_CHAT_ID`). Secret à ajouter au hub : `IZICARD_SUPABASE_SERVICE_KEY`.

@@ -2,7 +2,7 @@ import { z } from 'zod'
 import type { BotContext, InlineKeyboard } from '../../types'
 import type { ProjectSlug } from '../../projects.config'
 import { HubError } from '../../types'
-import { PROJECTS, type ProjectConfig } from '../../projects.config'
+import { PROJECTS, extraLabel, type ProjectConfig } from '../../projects.config'
 import { allowAiCall, markCallbackUsed, saveConversationTurn } from '../../core/state'
 import { hubKV } from '../../runtime-kv'
 import { answerCallback, sendDocument, sendMessage } from '../../core/telegram'
@@ -18,8 +18,8 @@ const formatDate = (value: string, timezone: string) => {
 const safeHttps = (value: string) => { try { const url = new URL(value); return url.protocol === 'https:' ? url.toString() : '' } catch { return '' } }
 const callbackSecret = (ctx: BotContext) => String(ctx.env.HUB_CALLBACK_SECRET ?? '')
 const projectChoices = Object.values(PROJECTS)
-const slugChar: Record<ProjectSlug, string> = { monmenu: 'm', sophiate: 's', vimsongre: 'v' }
-const charSlug: Record<string, ProjectSlug> = { m: 'monmenu', s: 'sophiate', v: 'vimsongre' }
+const slugChar: Record<ProjectSlug, string> = { monmenu: 'm', sophiate: 's', vimsongre: 'v', izicard: 'i' }
+const charSlug: Record<string, ProjectSlug> = { m: 'monmenu', s: 'sophiate', v: 'vimsongre', i: 'izicard' }
 
 export function localMidnightUtc(date: string, timezone: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date)
@@ -103,7 +103,7 @@ export function parseExportArgs(raw: string, timezone = 'UTC'): { project?: Proj
 }
 function testerLine(tester: Tester, project: ProjectConfig, timezone: string): string {
   const extra = project.extraColumns.map((key) => {
-    const label = key === 'use_case' ? 'À tester' : key === 'test_target' ? 'Cible' : key
+    const label = extraLabel(key)
     const value = tester.extra?.[key]
     return value == null || value === '' ? '' : ` · ${label}: ${escapeHtml(value)}`
   }).join('')
@@ -182,7 +182,7 @@ async function distribution(ctx: BotContext, project: ProjectConfig): Promise<vo
   const sections = [`<b>Appareil</b>\n${top(counts(testers.map((t) => t.device)), 10)}`, `<b>Pays / ville (top 5)</b>\n${top(counts(testers.map((t) => t.country_city)), 5)}`]
   for (const key of project.extraColumns) {
     const values = testers.map((t) => String(t.extra?.[key] ?? '')).filter(Boolean); const map = counts(values)
-    if (Object.keys(map).length > 0 && Object.keys(map).length <= 10) sections.push(`<b>${escapeHtml(key === 'use_case' ? 'À tester' : 'Cible')}</b>\n${top(map, 10)}`)
+    if (Object.keys(map).length > 0 && Object.keys(map).length <= 10) sections.push(`<b>${escapeHtml(extraLabel(key))}</b>\n${top(map, 10)}`)
   }
   await sendMessage(ctx.env, bot(ctx), ctx.chatId, `<b>${project.label} — ${testers.length} inscrits</b>\n\n${sections.join('\n\n')}`)
 }
@@ -338,7 +338,7 @@ export async function handleTesteurProjets(ctx: BotContext): Promise<void> {
       await saveConversationTurn(ctx.env, ctx.botId, ctx.user.id, ctx.update.update_id, ctx.text, finalIntent).catch(() => undefined)
     } catch (error) {
       const code = error instanceof HubError ? error.code : 'command_error'
-      const message = code === 'unknown_project' ? 'Projet inconnu. Choisis MonMenu, Sophiate ou Vimsongre.' : code === 'invalid_quota' ? 'Quota invalide : il doit être au moins égal au nombre d’inscrits et ne pas dépasser 500.' : code === 'invalid_date' ? 'Date invalide. Utilise AAAA-MM-JJ.' : 'Service momentanément indisponible.'
+      const message = code === 'unknown_project' ? 'Projet inconnu. Choisis MonMenu, Sophiate, Vimsongre ou IziCard.' : code === 'invalid_quota' ? 'Quota invalide : il doit être au moins égal au nombre d’inscrits et ne pas dépasser 500.' : code === 'invalid_date' ? 'Date invalide. Utilise AAAA-MM-JJ.' : 'Service momentanément indisponible.'
       await sendMessage(ctx.env, bot(ctx), ctx.chatId, message)
       await saveConversationTurn(ctx.env, ctx.botId, ctx.user.id, ctx.update.update_id, ctx.text, intent).catch(() => undefined)
     }
@@ -347,7 +347,7 @@ export async function handleTesteurProjets(ctx: BotContext): Promise<void> {
   await handleNaturalLanguage(ctx)
 }
 
-const ProjectArg = z.enum(['monmenu', 'sophiate', 'vimsongre'])
+const ProjectArg = z.enum(['monmenu', 'sophiate', 'vimsongre', 'izicard'])
 const ToolSchemas: Record<string, z.ZodTypeAny> = {
   stats: z.object({ project: ProjectArg.optional() }).strict(),
   liste: z.object({ project: ProjectArg.optional(), device: z.string().max(40).optional(), city: z.string().max(100).optional(), since: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }).strict(),
@@ -364,16 +364,16 @@ const ToolSchemas: Record<string, z.ZodTypeAny> = {
   aide: z.object({}).strict(),
 }
 const ToolDefinitions: LanguageTool[] = [
-  { name: 'stats', description: 'Lire les statistiques de tous les projets ou d’un projet choisi.', input_schema: { type: 'object', properties: { project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre'] } }, additionalProperties: false } },
-  { name: 'liste', description: 'Lister les testeurs inscrits, avec filtres facultatifs.', input_schema: { type: 'object', properties: { project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre'] }, device: { type: 'string' }, city: { type: 'string' }, since: { type: 'string', description: 'Date locale AAAA-MM-JJ dans HUB_TIMEZONE.' } }, additionalProperties: false } },
-  { name: 'derniers', description: 'Lire les inscriptions les plus récentes.', input_schema: { type: 'object', properties: { project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre'] }, count: { type: 'integer', minimum: 1, maximum: 20 } }, additionalProperties: false } },
-  { name: 'recherche', description: 'Rechercher un testeur par nom, e-mail ou WhatsApp.', input_schema: { type: 'object', properties: { query: { type: 'string' }, project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre'] } }, required: ['query'], additionalProperties: false } },
-  { name: 'repartition', description: 'Calculer la répartition par appareil, ville et champs projet.', input_schema: { type: 'object', properties: { project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre'] } }, additionalProperties: false } },
-  { name: 'export', description: 'Exporter un projet en fichier XLSX avec filtres facultatifs.', input_schema: { type: 'object', properties: { project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre'] }, device: { type: 'string' }, city: { type: 'string' }, since: { type: 'string', description: 'Date locale AAAA-MM-JJ dans HUB_TIMEZONE.' } }, additionalProperties: false } },
+  { name: 'stats', description: 'Lire les statistiques de tous les projets ou d’un projet choisi.', input_schema: { type: 'object', properties: { project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre', 'izicard'] } }, additionalProperties: false } },
+  { name: 'liste', description: 'Lister les testeurs inscrits, avec filtres facultatifs.', input_schema: { type: 'object', properties: { project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre', 'izicard'] }, device: { type: 'string' }, city: { type: 'string' }, since: { type: 'string', description: 'Date locale AAAA-MM-JJ dans HUB_TIMEZONE.' } }, additionalProperties: false } },
+  { name: 'derniers', description: 'Lire les inscriptions les plus récentes.', input_schema: { type: 'object', properties: { project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre', 'izicard'] }, count: { type: 'integer', minimum: 1, maximum: 20 } }, additionalProperties: false } },
+  { name: 'recherche', description: 'Rechercher un testeur par nom, e-mail ou WhatsApp.', input_schema: { type: 'object', properties: { query: { type: 'string' }, project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre', 'izicard'] } }, required: ['query'], additionalProperties: false } },
+  { name: 'repartition', description: 'Calculer la répartition par appareil, ville et champs projet.', input_schema: { type: 'object', properties: { project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre', 'izicard'] } }, additionalProperties: false } },
+  { name: 'export', description: 'Exporter un projet en fichier XLSX avec filtres facultatifs.', input_schema: { type: 'object', properties: { project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre', 'izicard'] }, device: { type: 'string' }, city: { type: 'string' }, since: { type: 'string', description: 'Date locale AAAA-MM-JJ dans HUB_TIMEZONE.' } }, additionalProperties: false } },
   { name: 'export_tout', description: 'Exporter les trois projets dans un classeur XLSX avec filtres facultatifs.', input_schema: { type: 'object', properties: { device: { type: 'string' }, city: { type: 'string' }, since: { type: 'string', description: 'Date locale AAAA-MM-JJ dans HUB_TIMEZONE.' } }, additionalProperties: false } },
-  { name: 'ouvrir', description: 'Demander confirmation pour ouvrir les inscriptions.', input_schema: { type: 'object', properties: { project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre'] } }, additionalProperties: false } },
-  { name: 'fermer', description: 'Demander confirmation pour fermer les inscriptions.', input_schema: { type: 'object', properties: { project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre'] } }, additionalProperties: false } },
-  { name: 'quota', description: 'Demander confirmation pour changer le quota ou objectif.', input_schema: { type: 'object', properties: { project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre'] }, value: { type: 'integer', minimum: 1, maximum: 500 } }, required: ['value'], additionalProperties: false } },
+  { name: 'ouvrir', description: 'Demander confirmation pour ouvrir les inscriptions.', input_schema: { type: 'object', properties: { project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre', 'izicard'] } }, additionalProperties: false } },
+  { name: 'fermer', description: 'Demander confirmation pour fermer les inscriptions.', input_schema: { type: 'object', properties: { project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre', 'izicard'] } }, additionalProperties: false } },
+  { name: 'quota', description: 'Demander confirmation pour changer le quota ou objectif.', input_schema: { type: 'object', properties: { project: { type: 'string', enum: ['monmenu', 'sophiate', 'vimsongre', 'izicard'] }, value: { type: 'integer', minimum: 1, maximum: 500 } }, required: ['value'], additionalProperties: false } },
   { name: 'sante', description: 'Vérifier les connexions Supabase et sites configurés.', input_schema: { type: 'object', properties: {}, additionalProperties: false } },
   { name: 'liens', description: 'Afficher les liens WhatsApp et admin configurés.', input_schema: { type: 'object', properties: {}, additionalProperties: false } },
   { name: 'aide', description: 'Afficher la liste des commandes du bot.', input_schema: { type: 'object', properties: {}, additionalProperties: false } },
